@@ -179,26 +179,43 @@ const TIERS = [
 
 // ═══ COMPONENTS ═══
 
+// Shared hook: IntersectionObserver + manual fallback for iframe/artifact environments
+function useInView(threshold = 0.3) {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true); }, { threshold });
+    obs.observe(el);
+    // Fallback: manually check if already in viewport (IO can miss this in iframes)
+    requestAnimationFrame(() => {
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (rect.top < window.innerHeight + 50 && rect.bottom > -50) setVisible(true);
+      }
+    });
+    return () => obs.disconnect();
+  }, [threshold]);
+  return [ref, visible];
+}
+
 function AnimatedCounter({ end, duration = 2000, prefix = "", suffix = "", decimals = 0 }) {
   const [val, setVal] = useState(0);
-  const ref = useRef(null);
+  const [ref, visible] = useInView(0.3);
   const started = useRef(false);
   useEffect(() => {
-    const obs = new IntersectionObserver(([e]) => {
-      if (e.isIntersecting && !started.current) {
-        started.current = true;
-        const s = performance.now();
-        const go = (now) => {
-          const p = Math.min((now - s) / duration, 1);
-          setVal((1 - Math.pow(1 - p, 3)) * end);
-          if (p < 1) requestAnimationFrame(go);
-        };
-        requestAnimationFrame(go);
-      }
-    }, { threshold: 0.3 });
-    if (ref.current) obs.observe(ref.current);
-    return () => obs.disconnect();
-  }, [end, duration]);
+    if (visible && !started.current) {
+      started.current = true;
+      const s = performance.now();
+      const go = (now) => {
+        const p = Math.min((now - s) / duration, 1);
+        setVal((1 - Math.pow(1 - p, 3)) * end);
+        if (p < 1) requestAnimationFrame(go);
+      };
+      requestAnimationFrame(go);
+    }
+  }, [visible, end, duration]);
   return <span ref={ref}>{prefix}{decimals > 0 ? val.toFixed(decimals) : Math.round(val).toLocaleString("fr-FR")}{suffix}</span>;
 }
 
@@ -207,14 +224,8 @@ function Sparkline({ data, color = V, width = 120, height = 32, animate = true }
   const max = Math.max(...data), min = Math.min(...data), range = max - min || 1;
   const pts = data.map((v, i) => `${(i/(data.length-1))*width},${height-((v-min)/range)*(height-4)-2}`).join(" ");
   const gid = `sg-${color.replace("#","")}-${Math.random().toString(36).slice(2,6)}`;
-  const ref = useRef(null);
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    if (!animate || !ref.current) return;
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true); }, { threshold: 0.3 });
-    obs.observe(ref.current);
-    return () => obs.disconnect();
-  }, [animate]);
+  const [ref, visible] = useInView(0.3);
+  const show = !animate || visible;
   // Estimate total path length
   var totalLen = 0;
   for (var i = 1; i < data.length; i++) {
@@ -225,28 +236,21 @@ function Sparkline({ data, color = V, width = 120, height = 32, animate = true }
   return (
     <svg ref={ref} width={width} height={height} style={{ display: "block", overflow: "visible" }}>
       <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity="0.3"/><stop offset="100%" stopColor={color} stopOpacity="0"/></linearGradient></defs>
-      <polygon points={`0,${height} ${pts} ${width},${height}`} fill={`url(#${gid})`} style={{ opacity: visible ? 1 : 0, transition: "opacity 1s ease 0.5s" }}/>
+      <polygon points={`0,${height} ${pts} ${width},${height}`} fill={`url(#${gid})`} style={{ opacity: show ? 1 : 0, transition: "opacity 1s ease 0.5s" }}/>
       <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
         style={animate ? {
           strokeDasharray: totalLen,
-          strokeDashoffset: visible ? 0 : totalLen,
+          strokeDashoffset: show ? 0 : totalLen,
           transition: "stroke-dashoffset 1.5s cubic-bezier(0.16,1,0.3,1)",
         } : {}}/>
-      {visible && <circle cx={(data.length-1)/(data.length-1)*width} cy={height-((data[data.length-1]-min)/range)*(height-4)-2} r="3" fill={color} style={{ animation: "breathe 2s ease-in-out infinite" }}/>}
+      {show && <circle cx={(data.length-1)/(data.length-1)*width} cy={height-((data[data.length-1]-min)/range)*(height-4)-2} r="3" fill={color} style={{ animation: "breathe 2s ease-in-out infinite" }}/>}
     </svg>
   );
 }
 
 function DonutChart({ value, max = 100, color = EM, size = 64, strokeWidth = 6, label }) {
   const r = (size - strokeWidth) / 2, c = 2 * Math.PI * r, offset = c * (1 - Math.min(value/max,1));
-  const ref = useRef(null);
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    if (!ref.current) return;
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true); }, { threshold: 0.3 });
-    obs.observe(ref.current);
-    return () => obs.disconnect();
-  }, []);
+  const [ref, visible] = useInView(0.3);
   return (
     <div ref={ref} style={{ position:"relative",width:size,height:size }}>
       <svg width={size} height={size} style={{ transform:"rotate(-90deg)" }}>
@@ -1997,14 +2001,7 @@ function FloatingOrbs() {
 
 // ═══ ANIMATED PROGRESS BAR ═══
 function AnimatedBar({ value, color, delay = 0 }) {
-  const ref = useRef(null);
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    if (!ref.current) return;
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true); }, { threshold: 0.3 });
-    obs.observe(ref.current);
-    return () => obs.disconnect();
-  }, []);
+  const [ref, visible] = useInView(0.3);
   return (
     <div ref={ref} style={{ height:4,borderRadius:2,background:S[700],overflow:"hidden" }}>
       <div style={{
@@ -2106,7 +2103,18 @@ export default function KansoDemo() {
     const obs = new IntersectionObserver((entries) => {
       entries.forEach((e) => { if (e.isIntersecting) setVisibleSections((prev) => new Set([...prev, e.target.id])); });
     }, { threshold: 0.15 });
-    document.querySelectorAll("[data-reveal]").forEach((el) => obs.observe(el));
+    const els = document.querySelectorAll("[data-reveal]");
+    els.forEach((el) => obs.observe(el));
+    // Fix: manually detect elements already in viewport on first paint
+    // IntersectionObserver can miss them in iframe/artifact environments
+    requestAnimationFrame(() => {
+      const alreadyVisible = new Set();
+      els.forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        if (rect.top < window.innerHeight && rect.bottom > 0) alreadyVisible.add(el.id);
+      });
+      if (alreadyVisible.size > 0) setVisibleSections((prev) => new Set([...prev, ...alreadyVisible]));
+    });
     return () => obs.disconnect();
   }, [page]);
 

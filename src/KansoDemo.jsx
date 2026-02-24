@@ -52,6 +52,7 @@ const PROFILES = {
       "supplier-watchtower": { suppliers: 38, alerts: 5, horsContrat: 2, sparkline: [62,63,65,67,69,71,73,75,76,78,80,82] },
       "sentinel": { indices: 14, refused: "6K€", clauses: 6, sparkline: [0,0,1,1,2,3,3,4,4,5,5,6] },
       "cockpit-daf": { savings: "45K€", roi: "×4", trend: "+12% vs N-1", sparkline: [2,5,9,14,19,24,28,32,36,39,42,45] },
+      "quality-inspector": { inspections: 127, tauxFournisseur: "82%", tauxInterne: "94%", litiges: 8, cashReclame: "4,2K€", sparkline: [5,12,22,35,48,62,74,85,96,108,118,127] },
     },
     scenario: {
       invoiceAmount: "18 420€",
@@ -116,6 +117,7 @@ const PROFILES = {
       "supplier-watchtower": { suppliers: 280, alerts: 42, horsContrat: 14, sparkline: [68,67,66,68,70,72,74,76,78,80,83,87] },
       "sentinel": { indices: 42, refused: "95K€", clauses: 28, sparkline: [0,5,15,28,42,58,78,98,125,155,185,215] },
       "cockpit-daf": { savings: "480K€", roi: "×10", trend: "+18% vs N-1", sparkline: [15,40,80,140,200,260,310,350,390,420,450,480] },
+      "quality-inspector": { inspections: 1420, tauxFournisseur: "76%", tauxInterne: "93%", litiges: 67, cashReclame: "38K€", sparkline: [40,120,240,380,520,680,820,960,1100,1220,1340,1420] },
     },
     scenario: {
       invoiceAmount: "127 340€",
@@ -163,14 +165,16 @@ const MODULES_BASE = [
     features: ["Score composite 5 axes (conformité, litiges, dépendance, santé fi., réactivité)","Suivi certifications (alertes 30j/90j avant expiration)","Détection achats hors contrat (dépenses > 10K€/an sans contrat)","Briefing pré-RDV : tout savoir avant de négocier"] },
   { id: "sentinel", icon: "📡", name: "Veille Marchés", tagline: "Indices de marché — contrez les hausses injustifiées", color: EM, tier: "Performance",
     features: ["Indices marché multi-sources (INSEE, Eurostat, BdF, Perplexity)","Extraction IA des clauses de révision + validation humaine","Simulation hausse fournisseur vs réalité marché","Pression prix par catégorie (chaud / tiède / froid / baisse)"] },
+  { id: "quality-inspector", icon: "📸", name: "Contrôle Qualité", tagline: "Chaque photo de défaut devient une demande d'avoir", color: RS, tier: "Custom",
+    features: ["Photo terrain → rapport IA en 60 secondes (Claude Vision)","Double périmètre : qualité fournisseur + qualité interne","Auto-litige si défaut critique (lien Récupération Cash)","Vue Négociation : vos défauts vs notre process — export PDF"] },
   { id: "cockpit-daf", icon: "🎯", name: "Cockpit Dirigeant", tagline: "Vue stratégique — pilotez, reportez, décidez", color: RS, tier: "Pilote",
-    features: ["7 onglets : Savings, Conformité, Risque, Performance, Équipe, Prix, Spend Map","S'adapte automatiquement aux modules activés","Rapports mensuels & annuels PDF automatiques","Le dirigeant forwarde à sa direction sans effort"] },
+    features: ["8 onglets : Savings, Conformité, Risque, Performance, Équipe, Prix, Qualité, Spend Map","S'adapte automatiquement aux modules activés","Rapports mensuels & annuels PDF automatiques","Le dirigeant forwarde à sa direction sans effort"] },
 ];
 
 const TIERS = [
   { name: "Pilote", price: "490", modules: ["Coffre-Fort Données","Récupération Cash","Cockpit Dirigeant"], highlight: false, color: CY, value: "Récupération cash + vue performance" },
   { name: "Standard", price: "990", modules: ["+ Contrôle Factures","+ Pilotage Fournisseurs"], highlight: true, color: V, value: "Zéro fuite + panel sous contrôle" },
-  { name: "Performance", price: "1 490", modules: ["+ Veille Marchés","Cockpit complet (7 onglets)"], highlight: false, color: EM, value: "Négociation data-driven + pilotage total" },
+  { name: "Performance", price: "1 490", modules: ["+ Veille Marchés","+ Contrôle Qualité IA","Cockpit complet (8 onglets)"], highlight: false, color: EM, value: "Négociation data-driven + qualité pilotée" },
 ];
 
 // ═══ COMPONENTS ═══
@@ -497,6 +501,7 @@ function InvoiceJourney({ profile }) {
     { icon: "🔍", label: "Contrôle", sub: "Anomalie détectée", color: AM },
     { icon: "⚔️", label: "Récupération", sub: "Réclamation auto", color: RD },
     { icon: "📡", label: "Veille", sub: "Vérif. marché", color: EM },
+    { icon: "📸", label: "Qualité", sub: "IA Vision", color: RS },
     { icon: "🎯", label: "Cockpit", sub: "Saving consolidé", color: RS },
   ];
   return (
@@ -648,6 +653,7 @@ function DashboardPreview({ profile }) {
     { id: "iw", icon: "🔍", name: "Contrôle Factures", color: AM },
     { id: "sw", icon: "🏰", name: "Pilotage Fournisseurs", color: V },
     { id: "sentinel", icon: "📡", name: "Veille Marchés", color: EM },
+    { id: "qi", icon: "📸", name: "Contrôle Qualité", color: RS },
     { id: "dv", icon: "🗄️", name: "Coffre-Fort", color: CY },
   ];
   const p = PROFILES[profile];
@@ -698,7 +704,8 @@ function DashboardPreview({ profile }) {
           {activeTab === 2 && <IWPreview p={p} isETI={isETI}/>}
           {activeTab === 3 && <SWPreview p={p} isETI={isETI}/>}
           {activeTab === 4 && <SentinelPreview p={p} isETI={isETI}/>}
-          {activeTab === 5 && <DVPreview p={p} isETI={isETI}/>}
+          {activeTab === 5 && <QIPreview p={p} isETI={isETI}/>}
+          {activeTab === 6 && <DVPreview p={p} isETI={isETI}/>}
         </div>
       </div>
 
@@ -750,7 +757,7 @@ function MockTable({ headers, rows }) {
 // ═══ COCKPIT DIRIGEANT ═══
 function CockpitPreview({ p, isETI }) {
   const [subTab, setSubTab] = useState(0);
-  const tabs = ["Savings & ROI","Conformité","Risque","Performance","Équipe","Prix"];
+  const tabs = ["Savings & ROI","Conformité","Risque","Performance","Équipe","Prix","Qualité"];
   const cd = p.modules["cockpit-daf"];
 
   const TabContent = () => {
@@ -935,6 +942,7 @@ function CockpitPreview({ p, isETI }) {
               {mod:"Contrôle Factures",icon:"🔍",v:isETI?89:12,max:isETI?120:20,c:AM},
               {mod:"Pilotage Fourn.",icon:"🏰",v:isETI?280:38,max:isETI?300:50,c:V},
               {mod:"Veille Marchés",icon:"📡",v:isETI?42:14,max:isETI?50:20,c:EM},
+              {mod:"Contrôle Qualité",icon:"📸",v:isETI?118:11,max:isETI?150:15,c:RS},
             ].map((m,i) => (
               <div key={i} style={{ display:"flex",alignItems:"center",gap:8,marginBottom:8 }}>
                 <span style={{ fontSize:10,width:12 }}>{m.icon}</span>
@@ -1067,6 +1075,76 @@ function CockpitPreview({ p, isETI }) {
         </div>
       </div>
     );
+
+    // ═══ TAB 6 — QUALITÉ ═══
+    if (subTab === 6) {
+      const qi = p.modules["quality-inspector"];
+      return (
+        <div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:16 }}>
+            <MockKPI label="Inspections totales" value={qi.inspections} color={RS} sub="YTD"/>
+            <MockKPI label="Conformité fourn." value={qi.tauxFournisseur} color={qi.tauxFournisseur.replace("%","")>=80?EM:AM} sub="réception"/>
+            <MockKPI label="Conformité interne" value={qi.tauxInterne} color={EM} sub="process"/>
+            <MockKPI label="Cash réclamé" value={qi.cashReclame} color={RD} sub={`${qi.litiges} litiges qualité`}/>
+          </div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12 }}>
+            <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+              <div style={{ fontSize:10,color:S[500],marginBottom:10 }}>Conformité fournisseur — 12 mois</div>
+              <Sparkline data={[68,65,70,72,74,71,75,78,76,80,82,parseInt(qi.tauxFournisseur)]} color={AM} width={200} height={60}/>
+              <div style={{ display:"flex",justifyContent:"space-between",marginTop:6 }}>
+                <span style={{ fontSize:9,color:S[600] }}>mars 2025 (68%)</span>
+                <span style={{ fontSize:9,color:AM,fontWeight:600 }}>fév. ({qi.tauxFournisseur})</span>
+              </div>
+            </div>
+            <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+              <div style={{ fontSize:10,color:S[500],marginBottom:10 }}>Conformité interne — 12 mois</div>
+              <Sparkline data={[90,91,92,91,93,92,94,93,94,95,94,parseInt(qi.tauxInterne)]} color={EM} width={200} height={60}/>
+              <div style={{ display:"flex",justifyContent:"space-between",marginTop:6 }}>
+                <span style={{ fontSize:9,color:S[600] }}>mars 2025 (90%)</span>
+                <span style={{ fontSize:9,color:EM,fontWeight:600 }}>fév. ({qi.tauxInterne})</span>
+              </div>
+            </div>
+          </div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12 }}>
+            <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+              <div style={{ fontSize:10,color:S[500],marginBottom:8 }}>Top 3 fournisseurs non-conformes</div>
+              {[
+                {name:isETI?"ACME Industries":"DELRIN Compo.",insp:isETI?47:12,conf:isETI?"56%":"58%",c:RD},
+                {name:isETI?"PROTO Mécanique":"SIGMA Élect.",insp:isETI?28:8,conf:isETI?"64%":"68%",c:AM},
+                {name:isETI?"NEXON Plastiques":"PROTO Méca.",insp:isETI?18:5,conf:isETI?"71%":"74%",c:AM},
+              ].map((f,i) => (
+                <div key={i} style={{ display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderTop:i?`1px solid ${S[850]}`:"none" }}>
+                  <span style={{ fontSize:13,fontWeight:800,color:f.c,width:32 }}>{f.conf}</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:10,fontWeight:600,color:S[300] }}>{f.name}</div>
+                    <div style={{ fontSize:9,color:S[500] }}>{f.insp} inspections</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+              <div style={{ fontSize:10,color:S[500],marginBottom:8 }}>Top 3 zones internes à surveiller</div>
+              {[
+                {zone:"Poste soudure",insp:isETI?14:4,conf:"88%",c:AM},
+                {zone:"Atelier montage",insp:isETI?12:3,conf:"92%",c:EM},
+                {zone:"Zone stockage",insp:isETI?6:2,conf:"96%",c:EM},
+              ].map((z,i) => (
+                <div key={i} style={{ display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderTop:i?`1px solid ${S[850]}`:"none" }}>
+                  <span style={{ fontSize:13,fontWeight:800,color:z.c,width:32 }}>{z.conf}</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:10,fontWeight:600,color:S[300] }}>{z.zone}</div>
+                    <div style={{ fontSize:9,color:S[500] }}>{z.insp} inspections</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ padding:10,borderRadius:8,background:"rgba(244,63,94,0.06)",fontSize:11,color:S[400],textAlign:"center" }}>
+            📸 Pipeline : photo terrain → IA Vision → rapport PDF → auto-litige en <strong style={{ color:EM }}>{'<'} 60s</strong> · Vue négociation disponible dans le module
+          </div>
+        </div>
+      );
+    }
 
     return null;
   };
@@ -1430,6 +1508,245 @@ function SentinelPreview({ p, isETI }) {
   );
 }
 
+// ═══ CONTRÔLE QUALITÉ ═══
+function QIPreview({ p, isETI }) {
+  const qi = p.modules["quality-inspector"];
+  const [viewMode, setViewMode] = useState("listing"); // listing | capture | negotiation
+  return (
+    <div>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
+        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+          <span style={{ fontSize:20 }}>📸</span>
+          <div><div style={{ fontSize:14,fontWeight:700,color:S[100] }}>Contrôle Qualité</div><div style={{ fontSize:10,color:S[500] }}>IA Vision — Réception fournisseur + Qualité interne</div></div>
+        </div>
+        <div style={{ fontSize:10,color:S[500],display:"flex",alignItems:"center",gap:4 }}><PulseDot color={RS} size={5}/> {qi.inspections} inspections</div>
+      </div>
+
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:16 }}>
+        <MockKPI label="Inspections" value={qi.inspections} color={RS}/>
+        <MockKPI label="Conformité fourn." value={qi.tauxFournisseur} color={qi.tauxFournisseur.replace("%","")>=80?EM:AM}/>
+        <MockKPI label="Conformité interne" value={qi.tauxInterne} color={EM}/>
+        <MockKPI label="Auto-litiges" value={qi.litiges} color={RD} sub={qi.cashReclame+" réclamés"}/>
+      </div>
+
+      {/* View toggle */}
+      <div style={{ display:"flex",gap:6,marginBottom:14 }}>
+        {[{k:"listing",l:"📋 Listing rapports"},{k:"capture",l:"📱 Vue Capture"},{k:"negotiation",l:"🤝 Vue Négociation"}].map(v => (
+          <button key={v.k} onClick={() => setViewMode(v.k)} style={{
+            padding:"5px 12px",borderRadius:8,fontSize:10,fontWeight:viewMode===v.k?700:400,
+            background:viewMode===v.k?`${RS}20`:S[850],color:viewMode===v.k?RS:S[500],
+            border:`1px solid ${viewMode===v.k?RS+"30":"transparent"}`,cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s",
+          }}>{v.l}</button>
+        ))}
+      </div>
+
+      {viewMode === "listing" && (
+        <div>
+          {/* Consolidated reports */}
+          <div style={{ fontSize:10,fontWeight:600,color:S[400],marginBottom:8 }}>Rapports consolidés</div>
+          <div style={{ display:"flex",flexDirection:"column",gap:8,marginBottom:14 }}>
+            {[
+              {origin:"🏭",name:isETI?"ACME Industries":"DELRIN Composants",date:"24/02/2026",count:isETI?6:3,score:58,status:"envoyé",statusC:EM},
+              {origin:"🏭",name:isETI?"PROTO Mécanique":"SIGMA Électronique",date:"24/02/2026",count:isETI?4:2,score:72,status:"en attente",statusC:AM},
+              {origin:"🏠",name:"INTERNE — Atelier montage",date:"24/02/2026",count:isETI?3:1,score:94,status:"validé",statusC:EM},
+            ].map((r,i) => (
+              <div key={i} style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:10,background:"rgba(30,41,59,0.5)",border:`1px solid ${S[800]}` }}>
+                <span style={{ fontSize:14 }}>{r.origin}</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:11,fontWeight:600,color:S[200] }}>{r.name}</div>
+                  <div style={{ fontSize:9,color:S[500] }}>{r.date} · {r.count} inspection{r.count>1?"s":""} · Score {r.score}%</div>
+                </div>
+                <span style={{ padding:"3px 10px",borderRadius:6,fontSize:9,fontWeight:600,background:`${r.statusC}15`,color:r.statusC }}>{r.status}</span>
+                {r.origin==="🏠" && <span style={{ fontSize:8,color:AM,fontWeight:600 }}>⚠️ Interne</span>}
+              </div>
+            ))}
+          </div>
+
+          {/* Individual inspections */}
+          <div style={{ fontSize:10,fontWeight:600,color:S[400],marginBottom:8 }}>Dernières inspections</div>
+          <MockTable
+            headers={["Origine","Code article","Fournisseur/Zone","Verdict","Score","Statut"]}
+            rows={[
+              [{text:"🏭",color:S[300]},"ART-4521",isETI?"ACME Ind.":"DELRIN",{text:"Majeur",color:RD},{text:"35%",color:RD},{text:"Auto-litige",color:RD}],
+              [{text:"🏭",color:S[300]},"ART-1287",isETI?"PROTO Méca.":"SIGMA",{text:"Mineur",color:AM},{text:"72%",color:AM},{text:"Validé",color:EM}],
+              [{text:"🏠",color:CY},"ART-3340","Atelier sud",{text:"Conforme",color:EM},{text:"95%",color:EM},{text:"Validé",color:EM}],
+              [{text:"🏭",color:S[300]},"ART-7812",isETI?"ACME Ind.":"DELRIN",{text:"Critique",color:RD},{text:"12%",color:RD},{text:"Auto-litige",color:RD}],
+              [{text:"🏠",color:CY},"ART-2205","Poste soudure",{text:"Mineur",color:AM},{text:"68%",color:AM},{text:"En attente",color:AM}],
+            ]}
+          />
+        </div>
+      )}
+
+      {viewMode === "capture" && (
+        <div>
+          {/* Mobile capture mockup */}
+          <div style={{ maxWidth:320,margin:"0 auto",borderRadius:24,overflow:"hidden",border:`2px solid ${S[700]}`,background:S[900] }}>
+            <div style={{ padding:"8px 16px",background:S[850],display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${S[800]}` }}>
+              <span style={{ fontSize:9,color:S[500] }}>9:41</span>
+              <span style={{ fontSize:10,fontWeight:600,color:S[300] }}>KANSO · Capture</span>
+              <span style={{ fontSize:9,color:S[500] }}>📶 🔋</span>
+            </div>
+            <div style={{ padding:16 }}>
+              {/* Origin toggle */}
+              <div style={{ display:"flex",borderRadius:10,overflow:"hidden",border:`1px solid ${S[700]}`,marginBottom:14 }}>
+                <div style={{ flex:1,padding:"8px 0",textAlign:"center",fontSize:10,fontWeight:700,background:`${RS}20`,color:RS }}>🏭 Réception</div>
+                <div style={{ flex:1,padding:"8px 0",textAlign:"center",fontSize:10,fontWeight:400,color:S[500] }}>🏠 Interne</div>
+              </div>
+
+              {/* Photo zone */}
+              <div style={{ height:140,borderRadius:12,background:`linear-gradient(135deg, ${S[850]}, ${S[800]})`,border:`2px dashed ${S[600]}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",marginBottom:12 }}>
+                <span style={{ fontSize:32,marginBottom:6 }}>📷</span>
+                <span style={{ fontSize:11,color:S[400],fontWeight:600 }}>Prendre la photo</span>
+                <span style={{ fontSize:8,color:S[600],marginTop:2 }}>Caméra arrière · Max 2048px</span>
+              </div>
+
+              {/* Fields */}
+              <div style={{ display:"flex",flexDirection:"column",gap:8,marginBottom:14 }}>
+                <div style={{ padding:"8px 12px",borderRadius:8,background:S[850],border:`1px solid ${S[700]}`,fontSize:10,color:S[300],display:"flex",justifyContent:"space-between" }}>
+                  <span>Code article</span><span style={{ color:V }}>ART-4521 ✓</span>
+                </div>
+                <div style={{ padding:"8px 12px",borderRadius:8,background:S[850],border:`1px solid ${S[700]}`,fontSize:10,color:S[300],display:"flex",justifyContent:"space-between" }}>
+                  <span>Fournisseur</span><span style={{ color:V }}>{isETI?"ACME Industries":"DELRIN"}</span>
+                </div>
+                <div style={{ padding:"8px 12px",borderRadius:8,background:S[850],border:`1px solid ${S[700]}`,fontSize:10,color:S[300],display:"flex",justifyContent:"space-between" }}>
+                  <span>Commentaire</span><span style={{ color:S[500] }}>🎤 ou texte</span>
+                </div>
+              </div>
+
+              {/* Send */}
+              <div style={{ padding:"10px 0",borderRadius:10,textAlign:"center",fontWeight:700,fontSize:12,background:`linear-gradient(135deg,${V},${VD})`,color:"white",letterSpacing:"0.02em" }}>
+                📤 Envoyer l'inspection
+              </div>
+              <div style={{ marginTop:10,display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:9,color:S[500] }}>
+                <span>⚙️ Auto-envoi : <strong style={{ color:EM }}>activé</strong></span>
+                <span>Dernière : <strong style={{ color:S[300] }}>il y a 12min ✅</strong></span>
+              </div>
+            </div>
+          </div>
+
+          {/* Pipeline recap */}
+          <div style={{ marginTop:14,display:"flex",gap:4,justifyContent:"center",alignItems:"center" }}>
+            {[
+              {icon:"📸",l:"Photo",c:S[400]},
+              {icon:"🤖",l:"Claude Vision",c:V},
+              {icon:"📊",l:"Rapport PDF",c:RS},
+              {icon:"⚔️",l:"Auto-litige",c:RD},
+            ].map((s,i) => (
+              <div key={i} style={{ display:"flex",alignItems:"center",gap:4 }}>
+                <div style={{ textAlign:"center",padding:"6px 10px",borderRadius:8,background:`${s.c}10`,border:`1px solid ${s.c}20` }}>
+                  <div style={{ fontSize:14 }}>{s.icon}</div>
+                  <div style={{ fontSize:8,color:s.c,fontWeight:600,marginTop:2 }}>{s.l}</div>
+                </div>
+                {i<3 && <span style={{ color:S[600],fontSize:10 }}>→</span>}
+              </div>
+            ))}
+          </div>
+          <div style={{ textAlign:"center",marginTop:8,fontSize:10,color:S[500] }}>Pipeline complet en <strong style={{ color:EM }}>{'<'} 60 secondes</strong></div>
+        </div>
+      )}
+
+      {viewMode === "negotiation" && (
+        <div>
+          <div style={{ padding:10,borderRadius:8,background:"rgba(139,92,246,0.06)",border:`1px solid rgba(139,92,246,0.1)`,marginBottom:14,display:"flex",alignItems:"center",gap:8 }}>
+            <span style={{ fontSize:12 }}>🔒</span>
+            <span style={{ fontSize:10,color:VL,fontWeight:600 }}>Vue réservée admin (DAF / CPO)</span>
+            <span style={{ fontSize:10,color:S[500] }}>— Données de négociation</span>
+          </div>
+
+          {/* Supplier selector */}
+          <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:14 }}>
+            <span style={{ fontSize:10,color:S[400] }}>Fournisseur :</span>
+            <span style={{ padding:"5px 14px",borderRadius:8,fontSize:11,fontWeight:700,background:`${V}15`,color:VL,border:`1px solid ${V}30` }}>{isETI?"ACME Industries":"DELRIN Composants"}</span>
+            <span style={{ fontSize:10,color:S[500] }}>Période : 3 mois</span>
+          </div>
+
+          {/* Side by side comparison */}
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14 }}>
+            {/* Their defects */}
+            <div style={{ padding:16,borderRadius:12,background:"rgba(239,68,68,0.06)",border:"1px solid rgba(239,68,68,0.12)" }}>
+              <div style={{ fontSize:11,fontWeight:700,color:RD,marginBottom:12 }}>🏭 Leurs défauts (réception)</div>
+              {[
+                {l:"Inspections",v:isETI?"47":"12"},
+                {l:"Conformité",v:isETI?"56%":"58%",c:RD},
+                {l:"Litiges qualité",v:isETI?"14":"4"},
+                {l:"Montant réclamé",v:isETI?"18,4K€":"3,8K€",c:AM},
+              ].map((r,i) => (
+                <div key={i} style={{ display:"flex",justifyContent:"space-between",padding:"4px 0",borderTop:i?`1px solid ${S[850]}`:"none",fontSize:10 }}>
+                  <span style={{ color:S[400] }}>{r.l}</span>
+                  <span style={{ fontWeight:700,color:r.c||S[200] }}>{r.v}</span>
+                </div>
+              ))}
+              <div style={{ marginTop:10 }}>
+                <div style={{ fontSize:9,color:S[500],marginBottom:4 }}>Top défauts</div>
+                <div style={{ display:"flex",gap:4,flexWrap:"wrap" }}>
+                  {["Rayure","Teinte","Cote hors tol."].map((d,i) => (
+                    <span key={i} style={{ padding:"2px 8px",borderRadius:4,fontSize:9,background:"rgba(239,68,68,0.1)",color:RD }}>{d}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Our quality */}
+            <div style={{ padding:16,borderRadius:12,background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.12)" }}>
+              <div style={{ fontSize:11,fontWeight:700,color:EM,marginBottom:12 }}>🏠 Notre qualité (interne)</div>
+              {[
+                {l:"Inspections internes",v:isETI?"32":"8"},
+                {l:"Conformité",v:isETI?"93%":"94%",c:EM},
+                {l:"Litiges internes",v:"0 (pas d'auto-litige)"},
+                {l:"Score interne",v:isETI?"93/100":"94/100",c:EM},
+              ].map((r,i) => (
+                <div key={i} style={{ display:"flex",justifyContent:"space-between",padding:"4px 0",borderTop:i?`1px solid ${S[850]}`:"none",fontSize:10 }}>
+                  <span style={{ color:S[400] }}>{r.l}</span>
+                  <span style={{ fontWeight:700,color:r.c||S[200] }}>{r.v}</span>
+                </div>
+              ))}
+              <div style={{ marginTop:10 }}>
+                <div style={{ fontSize:9,color:S[500],marginBottom:4 }}>Zones contrôlées</div>
+                <div style={{ display:"flex",gap:4,flexWrap:"wrap" }}>
+                  {["Montage","Soudure","Stockage"].map((d,i) => (
+                    <span key={i} style={{ padding:"2px 8px",borderRadius:4,fontSize:9,background:"rgba(16,185,129,0.1)",color:EM }}>{d}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Talking point */}
+          <div style={{ padding:14,borderRadius:12,background:"linear-gradient(135deg, rgba(239,68,68,0.06), rgba(16,185,129,0.06))",border:`1px solid ${V}20`,textAlign:"center" }}>
+            <div style={{ fontSize:12,fontWeight:700,color:S[200],marginBottom:6 }}>💡 Point de négociation</div>
+            <div style={{ fontSize:11,color:S[300],lineHeight:1.6,fontStyle:"italic" }}>
+              "Votre conformité est de <strong style={{ color:RD }}>{isETI?"56%":"58%"}</strong> sur 3 mois.
+              Notre process interne est à <strong style={{ color:EM }}>{isETI?"93%":"94%"}</strong>.
+              L'écart est mesurable et documenté."
+            </div>
+            <div style={{ marginTop:10,display:"flex",justifyContent:"center",gap:8 }}>
+              <span style={{ padding:"5px 14px",borderRadius:8,fontSize:10,fontWeight:600,background:`${V}15`,color:VL,cursor:"pointer" }}>📄 Exporter PDF négociation</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ModuleFooter
+        activities={[
+          { time:"08:12",icon:"📸",text:`Opérateur capture ART-4521 — photo envoyée en 12s (${isETI?"ACME":"DELRIN"})`,type:"human" },
+          { time:"08:12",icon:"🤖",text:"Claude Vision : comparaison référence Data Vault → défaut majeur (rayure profonde)",type:"auto" },
+          { time:"08:13",icon:"⚔️",text:`Auto-litige créé → Récupération Cash (severity=majeur, impact ${isETI?"2 400€":"580€"})`,type:"auto" },
+          { time:"18:00",icon:"📋",text:`Consolidation : 3 rapports générés (2 fournisseurs + 1 interne)`,type:"auto" },
+          { time:"18:01",icon:"📧",text:`Rapport ${isETI?"ACME":"DELRIN"} auto-envoyé (opérateur auto-envoi activé) avec CC DAF`,type:"auto" },
+        ]}
+        configs={[
+          { label:"Vision IA",value:"Claude 3.5",color:V },
+          { label:"Auto-litige",value:"≥ majeur",color:RD },
+          { label:"Consolidation",value:"18h00",color:AM },
+          { label:"Auto-envoi",value:"par opérateur",color:EM },
+          { label:"CC global",value:"DAF + Qualité",color:VL },
+        ]}
+        configFile="qi_config.json"
+      />
+    </div>
+  );
+}
+
 // ═══ COFFRE-FORT DONNÉES ═══
 function DVPreview({ p, isETI }) {
   return (
@@ -1644,7 +1961,7 @@ function CockpitVisual({ p }) {
         </div>
       </div>
       <div style={{ display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center" }}>
-        {["Savings & ROI","Conformité","Risque","Performance","Équipe","Prix","Spend Map"].map((t,i) => (
+        {["Savings & ROI","Conformité","Risque","Performance","Équipe","Prix","Qualité","Spend Map"].map((t,i) => (
           <span key={i} style={{ padding:"6px 12px",borderRadius:8,fontSize:11,fontWeight:i===0?600:400,background:i===0?`${V}15`:S[850],color:i===0?VL:S[500],border:`1px solid ${i===0?V+"20":"transparent"}` }}>{t}</span>
         ))}
       </div>
@@ -1725,6 +2042,7 @@ function FlowDiagram() {
           <FlowNode icon="⚔️" label="Récupération" sub="Passé (24 mois)" color={RD} sm/>
           <FlowNode icon="🔍" label="Contrôle" sub="Temps réel" color={AM} sm/>
           <FlowNode icon="📡" label="Veille" sub="Indices marché" color={EM} sm/>
+          <FlowNode icon="📸" label="Qualité" sub="IA Vision" color={RS} sm/>
         </div>
         <FlowArrow/>
         <FlowNode icon="🏰" label="Fournisseurs" sub="Score panel" color={V}/>
@@ -1732,7 +2050,7 @@ function FlowDiagram() {
         <FlowNode icon="🎯" label="Cockpit" sub="Vue direction" color={RS}/>
       </div>
       <div style={{ display:"flex",gap:24,marginTop:8,flexWrap:"wrap",justifyContent:"center" }}>
-        {[{c:CY,l:"Ingestion"},{c:RD,l:"Détection"},{c:V,l:"Agrégation"},{c:RS,l:"Pilotage"}].map((x,i) => (
+        {[{c:CY,l:"Ingestion"},{c:RD,l:"Détection"},{c:RS,l:"Qualité"},{c:V,l:"Agrégation"},{c:RS,l:"Pilotage"}].map((x,i) => (
           <div key={i} style={{ display:"flex",alignItems:"center",gap:6,fontSize:11,color:S[400] }}>
             <div style={{ width:8,height:8,borderRadius:"50%",background:x.c }}/>{x.l}
           </div>

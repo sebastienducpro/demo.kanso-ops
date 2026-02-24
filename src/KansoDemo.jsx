@@ -30,8 +30,8 @@ const PROFILES = {
     heroKpis: [
       { value: 45, suffix: "K€", label: "Savings récupérés", color: EM,
         info: { title: "Savings totaux YTD", calc: "Litiges récupérés (28K€) + Fuites évitées (11K€) + Hausses refusées (6K€) = 45K€", source: "Consolidation Cockpit Dirigeant — hypothèse conservatrice sur 12 mois, PME 10M€ CA" }},
-      { value: 7, suffix: "×", label: "ROI plateforme", color: V,
-        info: { title: "Retour sur investissement", calc: "45K€ savings ÷ 5 880€ (490€/mois × 12, palier Pilote) = ROI ×7,6 — affiché ×7 conservateur", source: "Coût palier Pilote. Calcul sur base annuelle." }},
+      { value: 4, suffix: "×", label: "ROI plateforme", color: V,
+        info: { title: "Retour sur investissement", calc: "45K€ savings ÷ 11 880€ (990€/mois × 12, palier Standard) = ROI ×3,8 — affiché ×4 conservateur", source: "Coût palier Standard. Calcul sur base annuelle." }},
       { value: 8, suffix: "", label: "Fuites bloquées", color: AM,
         info: { title: "Factures bloquées avant paiement", calc: "8 factures avec anomalies détectées par le Contrôle Factures en temps réel, soit 11K€ de surcoûts évités", source: "Module Contrôle Factures — alertes statut 'Bloqué'" }},
       { value: 5, suffix: " jours", label: "Déploiement", color: CY,
@@ -51,7 +51,7 @@ const PROFILES = {
       "invoice-watchdog": { blocked: 8, saved: "11K€", realtime: "< 2min", sparkline: [0,1,2,3,3,4,5,5,6,7,7,8] },
       "supplier-watchtower": { suppliers: 38, alerts: 5, horsContrat: 2, sparkline: [62,63,65,67,69,71,73,75,76,78,80,82] },
       "sentinel": { indices: 14, refused: "6K€", clauses: 6, sparkline: [0,0,1,1,2,3,3,4,4,5,5,6] },
-      "cockpit-daf": { savings: "45K€", roi: "×7", trend: "+12% vs N-1", sparkline: [2,5,9,14,19,24,28,32,36,39,42,45] },
+      "cockpit-daf": { savings: "45K€", roi: "×4", trend: "+12% vs N-1", sparkline: [2,5,9,14,19,24,28,32,36,39,42,45] },
     },
     scenario: {
       invoiceAmount: "18 420€",
@@ -63,12 +63,12 @@ const PROFILES = {
       marketActual: "+1,8%",
       marketSaving: "1 326€",
       cockpitSavings: "45K€",
-      cockpitRoi: "×7",
+      cockpitRoi: "×4",
       cockpitTrend: "+12% vs N-1",
     },
     impact: {
       savings: 45000,
-      costSub: 5880,
+      costSub: 11880,
       caEquiv: "450K€",
       caEquivCalc: "45K€ ÷ 10% marge nette = 450K€ de CA à générer pour le même résultat",
       hoursEquiv: "140h",
@@ -93,29 +93,29 @@ const PROFILES = {
     spend: "90M€",
     margin: "3,5%",
     heroKpis: [
-      { value: 1240, suffix: "K€", label: "Savings récupérés", color: EM,
-        info: { title: "Savings totaux YTD", calc: "Litiges récupérés (830K€) + Fuites évitées (195K€) + Hausses refusées (215K€) = 1 240K€", source: "Consolidation Cockpit Dirigeant — données réelles client" }},
-      { value: 12, suffix: "×", label: "ROI plateforme", color: V,
-        info: { title: "Retour sur investissement", calc: "1 240K€ savings ÷ 17 880€ (1 490€/mois × 12) = ROI ×69 — conservateur affiché ×12", source: "Coût palier Performance. Le ROI réel est souvent supérieur." }},
+      { value: 480, suffix: "K€", label: "Savings récupérés", color: EM,
+        info: { title: "Savings totaux YTD", calc: "Litiges récupérés (265K€) + Fuites évitées (120K€) + Hausses refusées (95K€) = 480K€", source: "Consolidation Cockpit Dirigeant — données réelles client" }},
+      { value: 10, suffix: "×", label: "ROI plateforme", color: V,
+        info: { title: "Retour sur investissement", calc: "480K€ savings ÷ 11 880€ (990€/mois × 12, palier Standard) = ROI ×40 — conservateur affiché ×10", source: "Coût palier Standard. Le ROI réel est souvent supérieur." }},
       { value: 89, suffix: "", label: "Fuites bloquées", color: AM,
-        info: { title: "Factures bloquées avant paiement", calc: "89 factures avec anomalies détectées par le Contrôle Factures, soit 195K€ de surcoûts évités", source: "Module Contrôle Factures — alertes statut 'Bloqué'" }},
+        info: { title: "Factures bloquées avant paiement", calc: "89 factures avec anomalies détectées par le Contrôle Factures, soit 120K€ de surcoûts évités", source: "Module Contrôle Factures — alertes statut 'Bloqué'" }},
       { value: 5, suffix: " jours", label: "Déploiement", color: CY,
         info: { title: "Temps de mise en service", calc: "J1: Coffre-Fort · J2-J3: Récupération Cash · J4: Contrôle Factures · J5: Cockpit Dirigeant", source: "Même délai PME/ETI. L'architecture est identique, seuls les volumes changent." }},
     ],
     effortCommercial: {
-      savings: "1,24M€",
-      caEquiv: "25M€ à 35M€",
-      caEquivShort: "~30M€",
-      moisProspection: "18 à 24 mois",
-      explication: "Avec une marge nette de 3,5-5%, il faut générer 25M€ à 35M€ de nouveau CA pour obtenir le même résultat net. Soit 18 à 24 mois d'effort commercial intensif.",
+      savings: "480K€",
+      caEquiv: "9,6M€ à 13,7M€",
+      caEquivShort: "~12M€",
+      moisProspection: "12 à 18 mois",
+      explication: "Avec une marge nette de 3,5-5%, il faut générer 9,6M€ à 13,7M€ de nouveau CA pour obtenir le même résultat net. Soit 12 à 18 mois d'effort commercial intensif.",
     },
     modules: {
       "data-vault": { docs: 15420, types: 10, sync: "4×/jour", sparkline: [50,180,420,780,1200,2100,3800,5600,7800,10200,12800,15420] },
-      "litige-killer": { detected: 247, recovered: "830K€", rate: "78%", sparkline: [5,12,28,45,62,78,95,120,155,190,230,247] },
-      "invoice-watchdog": { blocked: 89, saved: "195K€", realtime: "< 2min", sparkline: [3,8,15,22,31,38,45,52,61,70,79,89] },
+      "litige-killer": { detected: 247, recovered: "265K€", rate: "78%", sparkline: [5,12,28,45,62,78,95,120,155,190,230,247] },
+      "invoice-watchdog": { blocked: 89, saved: "120K€", realtime: "< 2min", sparkline: [3,8,15,22,31,38,45,52,61,70,79,89] },
       "supplier-watchtower": { suppliers: 280, alerts: 42, horsContrat: 14, sparkline: [68,67,66,68,70,72,74,76,78,80,83,87] },
-      "sentinel": { indices: 42, refused: "215K€", clauses: 28, sparkline: [0,5,15,28,42,58,78,98,125,155,185,215] },
-      "cockpit-daf": { savings: "1,24M€", roi: "×12", trend: "+23% vs N-1", sparkline: [40,120,240,380,520,660,780,880,980,1080,1160,1240] },
+      "sentinel": { indices: 42, refused: "95K€", clauses: 28, sparkline: [0,5,15,28,42,58,78,98,125,155,185,215] },
+      "cockpit-daf": { savings: "480K€", roi: "×10", trend: "+18% vs N-1", sparkline: [15,40,80,140,200,260,310,350,390,420,450,480] },
     },
     scenario: {
       invoiceAmount: "127 340€",
@@ -126,15 +126,15 @@ const PROFILES = {
       marketClaimed: "+12%",
       marketActual: "+2,3%",
       marketSaving: "12 405€",
-      cockpitSavings: "1,24M€",
-      cockpitRoi: "×12",
-      cockpitTrend: "+23% vs N-1",
+      cockpitSavings: "480K€",
+      cockpitRoi: "×10",
+      cockpitTrend: "+18% vs N-1",
     },
     impact: {
-      savings: 1240000,
-      costSub: 17880,
-      caEquiv: "24,8M€ à 35,4M€",
-      caEquivCalc: "1 240K€ ÷ 3,5% marge = 35,4M€ de CA · 1 240K€ ÷ 5% = 24,8M€",
+      savings: 480000,
+      costSub: 11880,
+      caEquiv: "9,6M€ à 13,7M€",
+      caEquivCalc: "480K€ ÷ 3,5% marge = 13,7M€ de CA · 480K€ ÷ 5% = 9,6M€",
       hoursEquiv: "2 400h",
       hoursCalc: "~18h par litige × 130 litiges traités manuellement évités = 2 340h · Coût horaire DAF ~85€ = 199K€",
       deployVsClassic: "5 jours vs 6-12 mois (intégration ERP classique)",
@@ -612,13 +612,13 @@ function CockpitPreview({ p, isETI }) {
         <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:16 }}>
           <MockKPI label="Savings YTD" value={cd.savings} color={EM} sub="cumulés"/>
           <MockKPI label="ROI plateforme" value={cd.roi} color={V} sub="annualisé"/>
-          <MockKPI label="Cash récupéré" value={isETI?"830K€":"28K€"} color={RD} sub="litiges"/>
-          <MockKPI label="Fuites évitées" value={isETI?"195K€":"11K€"} color={AM} sub="bloquées"/>
+          <MockKPI label="Cash récupéré" value={isETI?"265K€":"28K€"} color={RD} sub="litiges"/>
+          <MockKPI label="Fuites évitées" value={isETI?"120K€":"11K€"} color={AM} sub="bloquées"/>
         </div>
         <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12 }}>
           <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
             <div style={{ fontSize:10,color:S[500],marginBottom:10 }}>Savings par source</div>
-            {[{l:"Litiges récupérés",v:55,c:RD,m:isETI?"458K€":"15K€"},{l:"Fuites évitées",v:25,c:AM,m:isETI?"195K€":"11K€"},{l:"Hausses refusées",v:20,c:EM,m:isETI?"215K€":"6K€"}].map((b,i) => (
+            {[{l:"Litiges récupérés",v:55,c:RD,m:isETI?"146K€":"15K€"},{l:"Fuites évitées",v:25,c:AM,m:isETI?"120K€":"11K€"},{l:"Hausses refusées",v:20,c:EM,m:isETI?"95K€":"6K€"}].map((b,i) => (
               <div key={i} style={{ display:"flex",alignItems:"center",gap:8,marginBottom:8 }}>
                 <span style={{ fontSize:9,color:S[400],width:95 }}>{b.l}</span>
                 <div style={{ flex:1,height:6,borderRadius:3,background:S[800] }}><div style={{ height:"100%",borderRadius:3,width:`${b.v}%`,background:b.c,transition:"width 1s" }}/></div>
@@ -638,7 +638,7 @@ function CockpitPreview({ p, isETI }) {
           <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16,textAlign:"center" }}>
             <div>
               <div style={{ fontSize:9,color:S[500] }}>Coût annuel Kanso</div>
-              <div style={{ fontSize:16,fontWeight:700,color:S[300] }}>{isETI?"17 880€":"5 880€"}</div>
+              <div style={{ fontSize:16,fontWeight:700,color:S[300] }}>11 880€</div>
             </div>
             <div>
               <div style={{ fontSize:9,color:S[500] }}>Savings générés</div>
@@ -960,7 +960,7 @@ function CockpitPreview({ p, isETI }) {
           { time:"09:00",icon:"👤",text:"DAF consulte l'onglet Équipe — note la progression de Marie (+12 pts en 6 mois)",type:"human" },
         ]}
         configs={[
-          { label:"Objectif savings",value:isETI?"1,5M€":"60K€",color:EM },
+          { label:"Objectif savings",value:isETI?"500K€":"60K€",color:EM },
           { label:"Objectif conformité",value:"90%",color:CY },
           { label:"Objectif délai",value:"< 30j",color:V },
           { label:"Destinataires",value:isETI?"3":"1",color:V },
@@ -1239,7 +1239,7 @@ function SentinelPreview({ p, isETI }) {
         </div>
       </div>
       <div style={{ padding:12,borderRadius:10,background:"rgba(16,185,129,0.08)",textAlign:"center",marginBottom:12 }}>
-        <div style={{ fontSize:14,fontWeight:700,color:EM }}>💰 5,7% injustifié = {isETI?"~72K€":"~2 400€"} de saving</div>
+        <div style={{ fontSize:14,fontWeight:700,color:EM }}>💰 5,7% injustifié = {isETI?"~28K€":"~2 400€"} de saving</div>
         <div style={{ fontSize:10,color:S[400],marginTop:3 }}>Preuves exportables en PDF pour la négociation</div>
       </div>
 
@@ -1997,6 +1997,9 @@ export default function KansoDemo() {
                 </p>
                 <div style={{ display:"inline-flex",alignItems:"center",gap:6,marginTop:16,fontSize:13,fontWeight:600,color:VL }}>C'est pour ça qu'on est opérationnels en 5 jours, pas en 6 mois.</div>
               </div>
+
+              {/* ═══ SIMULATEUR ROI ═══ */}
+              <ROISimulator />
 
               {/* ═══ CTA PRINCIPAL ═══ */}
               <div style={{

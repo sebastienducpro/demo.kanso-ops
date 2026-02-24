@@ -304,6 +304,221 @@ function InfoBubble({ info, color = V }) {
   );
 }
 
+// ═══ SIMULATEUR ROI ═══
+function ROISimulator() {
+  const [spend, setSpend] = useState(10);
+  const [margin, setMargin] = useState(5);
+  const [animPct, setAnimPct] = useState(0);
+  const prevSpend = useRef(10);
+
+  useEffect(() => {
+    setAnimPct(0);
+    const t = setTimeout(() => setAnimPct(1), 50);
+    prevSpend.current = spend;
+    return () => clearTimeout(t);
+  }, [spend, margin]);
+
+  // ─── Taux benchmark sourcés ───
+  const RATES = {
+    litiges:  0.005,  // 0.5% du spend
+    fuites:   0.002,  // 0.2% du spend
+    hausses:  0.0015, // 0.15% du spend
+  };
+  const spendM = spend * 1000000;
+  const litiges = Math.round(spendM * RATES.litiges);
+  const fuites  = Math.round(spendM * RATES.fuites);
+  const hausses = Math.round(spendM * RATES.hausses);
+  const total   = litiges + fuites + hausses;
+  const coutAn  = 990 * 12; // Standard 990€/mois
+  const roi     = total / coutAn;
+  const caEquiv = Math.round(total / (margin / 100));
+
+  const fmtK = (v) => v >= 1000000 ? (v/1000000).toFixed(1).replace(".",",") + "M€" : v >= 1000 ? Math.round(v/1000) + "K€" : v + "€";
+  const fmtROI = (v) => v >= 10 ? "×" + Math.round(v) : "×" + v.toFixed(1).replace(".",",");
+
+  const barMax = total || 1;
+  const lines = [
+    { label:"Écarts factures récupérables", value:litiges, color:EM, icon:"💰", pct: RATES.litiges*100,
+      info: { title:"Écarts prix factures vs contrats",
+        calc:`${(RATES.litiges*100).toFixed(1)}% × ${spend}M€ de spend = ${fmtK(litiges)}. Taux conservateur basé sur les écarts prix, doublons et erreurs de facturation détectables automatiquement.`,
+        source:"Institute of Finance & Management : 39% des factures contiennent des erreurs. Ardent Partners 2024 : écart moyen constaté de 1 à 3% du spend. Taux KANSO : 0,5% (hypothèse basse, écarts contractuels uniquement)." }},
+    { label:"Fuites évitées avant paiement", value:fuites, color:CY, icon:"🛡️", pct: RATES.fuites*100,
+      info: { title:"Surfacturations bloquées en temps réel",
+        calc:`${(RATES.fuites*100).toFixed(1)}% × ${spend}M€ = ${fmtK(fuites)}. Détection automatique des anomalies sur chaque nouvelle facture, avant validation du paiement.`,
+        source:"CAPS Research : 2% de réduction moyenne des coûts via procurement structuré. Stampli/IFM : 68% des entreprises ont >1% d'erreurs factures. Taux KANSO : 0,2% (détection temps réel, surfacturations uniquement)." }},
+    { label:"Hausses fournisseurs injustifiées refusées", value:hausses, color:V, icon:"📉", pct: RATES.hausses*100,
+      info: { title:"Hausses non corrélées aux indices marché",
+        calc:`${(RATES.hausses*100).toFixed(1)}% × ${spend}M€ = ${fmtK(hausses)}. Vérification automatique des demandes de hausse vs indices INSEE/Eurostat et clauses contractuelles.`,
+        source:"Deloitte CPO Survey 2023 : 67% des entreprises subissent des hausses fournisseurs >5%/an. CAPS Research : world-class = 2% savings sur total spend. Taux KANSO : 0,15% (hausses refusées sur base d'indices publics)." }},
+  ];
+
+  const sliderBg = `linear-gradient(90deg, ${V} ${((spend-1)/99)*100}%, ${S[700]} ${((spend-1)/99)*100}%)`;
+
+  return (
+    <div style={{ marginTop:64,padding:"40px 0" }}>
+      {/* Title */}
+      <div style={{ textAlign:"center",marginBottom:36 }}>
+        <span className="tag" style={{ background:"rgba(139,92,246,0.15)",color:VL,marginBottom:12 }}>🧮 Simulateur</span>
+        <h3 style={{ fontSize:28,fontWeight:800,marginTop:12,letterSpacing:"-0.02em" }}>
+          Estimez vos savings en 10 secondes
+        </h3>
+        <p style={{ fontSize:14,color:S[400],marginTop:8,maxWidth:480,margin:"8px auto 0" }}>
+          Saisissez votre volume d'achats annuel — les taux sont issus d'études sectorielles.
+        </p>
+      </div>
+
+      {/* Input Area */}
+      <div style={{
+        background:S[850], borderRadius:20, border:`1px solid ${S[700]}`,
+        padding:"32px 28px", maxWidth:700, margin:"0 auto",
+      }}>
+        {/* Spend Slider */}
+        <div style={{ marginBottom:28 }}>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:12 }}>
+            <label style={{ fontSize:14,fontWeight:600,color:S[200] }}>Volume d'achats annuel</label>
+            <div style={{ display:"flex",alignItems:"baseline",gap:4 }}>
+              <span style={{ fontSize:36,fontWeight:900,color:VL,letterSpacing:"-0.03em",lineHeight:1 }}>{spend}</span>
+              <span style={{ fontSize:16,fontWeight:600,color:S[400] }}>M€</span>
+            </div>
+          </div>
+          <input
+            type="range" min={1} max={100} step={1} value={spend}
+            onChange={(e) => setSpend(Number(e.target.value))}
+            style={{
+              width:"100%",height:6,borderRadius:3,appearance:"none",WebkitAppearance:"none",
+              background:sliderBg, outline:"none",cursor:"pointer",
+            }}
+          />
+          <style>{`
+            input[type=range]::-webkit-slider-thumb {
+              -webkit-appearance:none; width:22px; height:22px; border-radius:50%;
+              background:${VL}; border:3px solid ${S[900]}; cursor:pointer;
+              box-shadow:0 0 12px rgba(139,92,246,0.4);
+            }
+            input[type=range]::-moz-range-thumb {
+              width:22px; height:22px; border-radius:50%;
+              background:${VL}; border:3px solid ${S[900]}; cursor:pointer;
+              box-shadow:0 0 12px rgba(139,92,246,0.4);
+            }
+          `}</style>
+          <div style={{ display:"flex",justifyContent:"space-between",fontSize:11,color:S[500],marginTop:6 }}>
+            <span>1M€</span><span>25M€</span><span>50M€</span><span>75M€</span><span>100M€</span>
+          </div>
+        </div>
+
+        {/* Margin input */}
+        <div style={{ display:"flex",alignItems:"center",gap:12,marginBottom:24,padding:"12px 16px",borderRadius:10,background:S[800] }}>
+          <span style={{ fontSize:13,color:S[400],whiteSpace:"nowrap" }}>Marge nette</span>
+          <div style={{ display:"flex",alignItems:"center",gap:4 }}>
+            {[3,5,8,10].map(m => (
+              <button key={m} onClick={() => setMargin(m)} style={{
+                padding:"4px 12px",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",
+                border: margin===m ? `1px solid ${V}` : `1px solid ${S[600]}`,
+                background: margin===m ? `${V}22` : "transparent",
+                color: margin===m ? VL : S[400],
+                transition:"all 0.2s",
+              }}>{m}%</button>
+            ))}
+          </div>
+          <InfoBubble info={{
+            title:"Marge nette industrielle",
+            calc:"La marge nette détermine le CA additionnel nécessaire pour obtenir le même résultat net que les savings. Ex : 50K€ de savings à 5% de marge = 1M€ de CA équivalent.",
+            source:"INSEE Esane 2023 : marge nette médiane industrie manufacturière (C10-C33) = 3,5 à 5%. PME services : 8-12%."
+          }} color={S[400]} />
+        </div>
+
+        {/* ─── Results ─── */}
+        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+          {lines.map((l,i) => (
+            <div key={i} style={{
+              display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderRadius:12,
+              background:S[800],border:`1px solid ${S[700]}`,
+              transition:"all 0.4s ease",
+            }}>
+              <span style={{ fontSize:20,width:28,textAlign:"center" }}>{l.icon}</span>
+              <div style={{ flex:1,minWidth:0 }}>
+                <div style={{ display:"flex",alignItems:"center",gap:4 }}>
+                  <span style={{ fontSize:12,color:S[300] }}>{l.label}</span>
+                  <span style={{ fontSize:10,color:S[500],fontWeight:500 }}>({l.pct.toFixed(1)}% du spend)</span>
+                  <InfoBubble info={l.info} color={l.color} />
+                </div>
+                {/* Progress bar */}
+                <div style={{ marginTop:6,height:6,borderRadius:3,background:S[700],overflow:"hidden" }}>
+                  <div style={{
+                    height:"100%",borderRadius:3,background:l.color,
+                    width: `${(l.value/barMax)*100}%`,
+                    transition:"width 0.6s ease",
+                  }}/>
+                </div>
+              </div>
+              <span style={{ fontSize:18,fontWeight:800,color:l.color,minWidth:60,textAlign:"right",letterSpacing:"-0.02em" }}>
+                {fmtK(l.value)}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* ─── Total ─── */}
+        <div style={{
+          marginTop:16,padding:"16px 20px",borderRadius:14,
+          background:`linear-gradient(135deg, rgba(139,92,246,0.1) 0%, rgba(16,185,129,0.1) 100%)`,
+          border:`1px solid rgba(139,92,246,0.25)`,
+        }}>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
+            <div style={{ display:"flex",alignItems:"center",gap:6 }}>
+              <span style={{ fontSize:14,fontWeight:700,color:S[200] }}>📊 SAVINGS ESTIMÉS / AN</span>
+              <InfoBubble info={{
+                title:"Total savings annuel estimé",
+                calc:`(0,5% + 0,2% + 0,15%) × ${spend}M€ = 0,85% × ${spend}M€ = ${fmtK(total)}. Estimation conservatrice — les taux réels varient selon le secteur, la maturité achats et le volume de transactions.`,
+                source:"Ardent Partners 2024 : world-class procurement = 6% savings rate. CAPS Research : average = 2% cost reduction. Taux KANSO combiné (0,85%) = fourchette basse du marché."
+              }} color={EM} />
+            </div>
+            <span style={{ fontSize:28,fontWeight:900,color:EM,letterSpacing:"-0.03em" }}>{fmtK(total)}</span>
+          </div>
+
+          {/* ROI & CA equiv */}
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12 }}>
+            <div style={{ padding:"10px 12px",borderRadius:10,background:S[850],textAlign:"center" }}>
+              <div style={{ fontSize:10,color:S[500],marginBottom:4,textTransform:"uppercase",letterSpacing:"0.05em" }}>ROI plateforme</div>
+              <div style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:2 }}>
+                <span style={{ fontSize:22,fontWeight:900,color:roi>=3?EM:roi>=1.5?AM:RD }}>{fmtROI(roi)}</span>
+                <InfoBubble info={{
+                  title:"Retour sur investissement",
+                  calc:`${fmtK(total)} savings ÷ ${coutAn.toLocaleString("fr-FR")}€ (990€/mois × 12) = ${fmtROI(roi)}`,
+                  source:"Coût palier Standard KANSO-OPS : 990€/mois HT. ROI calculé sur base annuelle, savings nets."
+                }} color={roi>=3?EM:AM} />
+              </div>
+              <div style={{ fontSize:10,color:S[500],marginTop:2 }}>vs 990€/mois</div>
+            </div>
+            <div style={{ padding:"10px 12px",borderRadius:10,background:S[850],textAlign:"center" }}>
+              <div style={{ fontSize:10,color:S[500],marginBottom:4,textTransform:"uppercase",letterSpacing:"0.05em" }}>CA équivalent</div>
+              <div style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:2 }}>
+                <span style={{ fontSize:22,fontWeight:900,color:RS }}>{fmtK(caEquiv)}</span>
+                <InfoBubble info={{
+                  title:"CA commercial équivalent",
+                  calc:`${fmtK(total)} savings ÷ ${margin}% marge nette = ${fmtK(caEquiv)} de CA. Il faudrait vendre ${fmtK(caEquiv)} de plus pour obtenir le même résultat net.`,
+                  source:`Marge nette sélectionnée : ${margin}%. INSEE Esane 2023 : industrie manufacturière 3,5-5%, services 8-12%.`
+                }} color={RS} />
+              </div>
+              <div style={{ fontSize:10,color:S[500],marginTop:2 }}>à vendre en plus</div>
+            </div>
+            <div style={{ padding:"10px 12px",borderRadius:10,background:S[850],textAlign:"center" }}>
+              <div style={{ fontSize:10,color:S[500],marginBottom:4,textTransform:"uppercase",letterSpacing:"0.05em" }}>Coût plateforme</div>
+              <div style={{ fontSize:22,fontWeight:900,color:S[300] }}>990€<span style={{ fontSize:12,fontWeight:500 }}>/mois</span></div>
+              <div style={{ fontSize:10,color:S[500],marginTop:2 }}>{coutAn.toLocaleString("fr-FR")}€/an</div>
+            </div>
+          </div>
+
+          {/* Disclaimer */}
+          <div style={{ marginTop:12,fontSize:10,color:S[500],textAlign:"center",lineHeight:1.5,fontStyle:"italic" }}>
+            Estimation basée sur des benchmarks sectoriels (Ardent Partners, CAPS Research, IFM). Les résultats réels varient selon votre secteur et maturité achats. Le Flash Audit gratuit vous donnera un chiffrage précis.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ═══ FACTURE-X SECTION ═══
 function FactureXBlock({ data, profile }) {
   const urgencyColor = data.globalScore >= 70 ? EM : data.globalScore >= 50 ? AM : RD;
@@ -2069,7 +2284,7 @@ export default function KansoDemo() {
             ✉️ sebastien.duc@kanso-ops.fr
           </a>
         </div>
-        <p style={{ fontSize:11,color:S[600] }}>© 2026 KANSO-OPS · Sébastien Duc · Strasbourg, France</p>
+        <p style={{ fontSize:11,color:S[600] }}>© 2026 KANSO-OPS · Sébastien Duc · Lyon, France</p>
       </footer>
     </div>
   );

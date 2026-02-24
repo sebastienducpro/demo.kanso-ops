@@ -198,32 +198,61 @@ function AnimatedCounter({ end, duration = 2000, prefix = "", suffix = "", decim
   return <span ref={ref}>{prefix}{decimals > 0 ? val.toFixed(decimals) : Math.round(val).toLocaleString("fr-FR")}{suffix}</span>;
 }
 
-function Sparkline({ data, color = V, width = 120, height = 32 }) {
+function Sparkline({ data, color = V, width = 120, height = 32, animate = true }) {
   if (!data || data.length < 2) return null;
   const max = Math.max(...data), min = Math.min(...data), range = max - min || 1;
   const pts = data.map((v, i) => `${(i/(data.length-1))*width},${height-((v-min)/range)*(height-4)-2}`).join(" ");
-  const gid = `sg-${color.replace("#","")}`;
+  const gid = `sg-${color.replace("#","")}-${Math.random().toString(36).slice(2,6)}`;
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (!animate || !ref.current) return;
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true); }, { threshold: 0.3 });
+    obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, [animate]);
+  // Estimate total path length
+  var totalLen = 0;
+  for (var i = 1; i < data.length; i++) {
+    var dx = (1/(data.length-1))*width;
+    var dy = ((data[i]-min)/range - (data[i-1]-min)/range)*(height-4);
+    totalLen += Math.sqrt(dx*dx + dy*dy);
+  }
   return (
-    <svg width={width} height={height} style={{ display: "block" }}>
+    <svg ref={ref} width={width} height={height} style={{ display: "block", overflow: "visible" }}>
       <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity="0.3"/><stop offset="100%" stopColor={color} stopOpacity="0"/></linearGradient></defs>
-      <polygon points={`0,${height} ${pts} ${width},${height}`} fill={`url(#${gid})`}/>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <polygon points={`0,${height} ${pts} ${width},${height}`} fill={`url(#${gid})`} style={{ opacity: visible ? 1 : 0, transition: "opacity 1s ease 0.5s" }}/>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+        style={animate ? {
+          strokeDasharray: totalLen,
+          strokeDashoffset: visible ? 0 : totalLen,
+          transition: "stroke-dashoffset 1.5s cubic-bezier(0.16,1,0.3,1)",
+        } : {}}/>
+      {visible && <circle cx={(data.length-1)/(data.length-1)*width} cy={height-((data[data.length-1]-min)/range)*(height-4)-2} r="3" fill={color} style={{ animation: "breathe 2s ease-in-out infinite" }}/>}
     </svg>
   );
 }
 
 function DonutChart({ value, max = 100, color = EM, size = 64, strokeWidth = 6, label }) {
   const r = (size - strokeWidth) / 2, c = 2 * Math.PI * r, offset = c * (1 - Math.min(value/max,1));
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (!ref.current) return;
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true); }, { threshold: 0.3 });
+    obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, []);
   return (
-    <div style={{ position:"relative",width:size,height:size }}>
+    <div ref={ref} style={{ position:"relative",width:size,height:size }}>
       <svg width={size} height={size} style={{ transform:"rotate(-90deg)" }}>
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={S[700]} strokeWidth={strokeWidth}/>
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={strokeWidth}
-          strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round"
-          style={{ transition:"stroke-dashoffset 1.5s cubic-bezier(0.4,0,0.2,1)" }}/>
+          strokeDasharray={c} strokeDashoffset={visible ? offset : c} strokeLinecap="round"
+          style={{ transition:"stroke-dashoffset 1.5s cubic-bezier(0.16,1,0.3,1) 0.2s" }}/>
       </svg>
       <div style={{ position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center" }}>
-        <span style={{ fontSize:13,fontWeight:700,color:S[50] }}>{Math.round(value)}%</span>
+        <span style={{ fontSize:13,fontWeight:700,color:S[50] }}>{visible ? Math.round(value) : 0}%</span>
         {label && <span style={{ fontSize:7,color:S[400],marginTop:-2 }}>{label}</span>}
       </div>
     </div>
@@ -300,9 +329,7 @@ function FactureXBlock({ data, profile }) {
               <span style={{ fontSize:11,color:S[400] }}>{a.label}</span>
               <span style={{ fontSize:12,fontWeight:700,color: a.score >= 70 ? EM : a.score >= 50 ? AM : RD }}>{a.score}%</span>
             </div>
-            <div style={{ height:4,borderRadius:2,background:S[700] }}>
-              <div style={{ height:"100%",borderRadius:2,width:`${a.score}%`,background:a.score>=70?EM:a.score>=50?AM:RD,transition:"width 1s" }}/>
-            </div>
+            <AnimatedBar value={a.score} color={a.score>=70?EM:a.score>=50?AM:RD} delay={i*0.15}/>
           </div>
         ))}
       </div>
@@ -408,7 +435,63 @@ function ImpactBlock({ profile }) {
   );
 }
 
-// ═══ DASHBOARD PREVIEW PAGE ═══
+// ═══ DASHBOARD PREVIEW PAGE — ENHANCED v4 ═══
+
+function ActivityItem({ time, icon, text, type = "auto" }) {
+  return (
+    <div style={{ display:"flex",gap:10,alignItems:"flex-start",padding:"7px 0",borderBottom:`1px solid ${S[850]}` }}>
+      <div style={{ fontSize:9,color:S[600],minWidth:38,marginTop:2,fontFamily:"'JetBrains Mono',monospace" }}>{time}</div>
+      <span style={{ fontSize:12,flexShrink:0 }}>{icon}</span>
+      <div style={{ flex:1,fontSize:11,color:S[300],lineHeight:1.5 }}>{text}</div>
+      <span style={{ fontSize:8,padding:"2px 7px",borderRadius:4,fontWeight:600,flexShrink:0,whiteSpace:"nowrap",
+        background: type==="auto" ? "rgba(16,185,129,0.1)" : type==="human" ? "rgba(139,92,246,0.1)" : "rgba(245,158,11,0.1)",
+        color: type==="auto" ? EM : type==="human" ? VL : AM,
+      }}>{type==="auto" ? "⚡ Auto" : type==="human" ? "👤 Humain" : "⚙️ Config"}</span>
+    </div>
+  );
+}
+
+function ModuleFooter({ activities, configs, configFile }) {
+  const [showActivity, setShowActivity] = useState(false);
+  return (
+    <div style={{ marginTop:16 }}>
+      {/* Activity toggle */}
+      <button onClick={() => setShowActivity(!showActivity)} style={{
+        width:"100%",padding:"10px 14px",borderRadius:10,border:`1px solid ${S[800]}`,
+        background:showActivity?"rgba(30,41,59,0.5)":"rgba(30,41,59,0.2)",
+        color:S[300],fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
+        display:"flex",alignItems:"center",gap:8,transition:"all 0.3s",
+      }}>
+        <span style={{ fontSize:13 }}>🔄</span>
+        Activité des dernières 24h
+        <span style={{ marginLeft:"auto",fontSize:10,color:S[500],transform:showActivity?"rotate(180deg)":"rotate(0)",transition:"transform 0.3s" }}>▼</span>
+      </button>
+      {showActivity && (
+        <div style={{ padding:"8px 14px",borderRadius:"0 0 10px 10px",background:"rgba(30,41,59,0.3)",border:`1px solid ${S[850]}`,borderTop:"none",animation:"fadeInUp 0.3s ease" }}>
+          {activities.map((a,i) => <ActivityItem key={i} {...a}/>)}
+        </div>
+      )}
+
+      {/* Config bar */}
+      <div style={{ marginTop:10,padding:"10px 14px",borderRadius:10,background:"rgba(245,158,11,0.03)",border:`1px solid rgba(245,158,11,0.08)` }}>
+        <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:8 }}>
+          <span style={{ fontSize:11 }}>⚙️</span>
+          <span style={{ fontSize:10,fontWeight:600,color:AM }}>Configurable sans code</span>
+          {configFile && <span style={{ marginLeft:"auto",fontSize:9,color:S[600],fontFamily:"'JetBrains Mono',monospace" }}>{configFile}</span>}
+        </div>
+        <div style={{ display:"flex",flexWrap:"wrap",gap:4 }}>
+          {configs.map((c,i) => (
+            <span key={i} style={{ display:"inline-flex",alignItems:"center",gap:4,padding:"3px 10px",borderRadius:6,background:`${c.color||V}08`,border:`1px solid ${c.color||V}12`,fontSize:10 }}>
+              <span style={{ color:S[500] }}>{c.label}</span>
+              <span style={{ fontWeight:600,color:c.color||VL,fontFamily:"'JetBrains Mono',monospace" }}>{c.value}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DashboardPreview({ profile }) {
   const [activeTab, setActiveTab] = useState(0);
   const tabs = [
@@ -420,6 +503,7 @@ function DashboardPreview({ profile }) {
     { id: "dv", icon: "🗄️", name: "Coffre-Fort", color: CY },
   ];
   const p = PROFILES[profile];
+  const isETI = profile === "eti";
 
   return (
     <div>
@@ -454,42 +538,60 @@ function DashboardPreview({ profile }) {
             <div style={{ width:10,height:10,borderRadius:"50%",background:"#f59e0b" }}/>
             <div style={{ width:10,height:10,borderRadius:"50%",background:"#10b981" }}/>
           </div>
-          <div style={{ flex:1,textAlign:"center",fontSize:11,color:S[500],fontFamily:"monospace" }}>
-            app.kanso-ops.com — {tabs[activeTab].name}
+          <div style={{ flex:1,textAlign:"center",fontSize:11,color:S[500],fontFamily:"monospace",display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}>
+            <PulseDot color={EM} size={5}/> app.kanso-ops.com — {tabs[activeTab].name}
           </div>
         </div>
 
         {/* Content */}
-        <div style={{ padding:20,minHeight:380 }}>
-          {activeTab === 0 && <CockpitPreview p={p}/>}
-          {activeTab === 1 && <LKPreview p={p}/>}
-          {activeTab === 2 && <IWPreview p={p}/>}
-          {activeTab === 3 && <SWPreview p={p}/>}
-          {activeTab === 4 && <SentinelPreview p={p}/>}
-          {activeTab === 5 && <DVPreview p={p}/>}
+        <div key={`${activeTab}-${profile}`} style={{ padding:24,minHeight:420,animation:"fadeInUp 0.3s ease" }}>
+          {activeTab === 0 && <CockpitPreview p={p} isETI={isETI}/>}
+          {activeTab === 1 && <LKPreview p={p} isETI={isETI}/>}
+          {activeTab === 2 && <IWPreview p={p} isETI={isETI}/>}
+          {activeTab === 3 && <SWPreview p={p} isETI={isETI}/>}
+          {activeTab === 4 && <SentinelPreview p={p} isETI={isETI}/>}
+          {activeTab === 5 && <DVPreview p={p} isETI={isETI}/>}
         </div>
+      </div>
+
+      {/* ═══ BELOW DASHBOARD — THREE PILLARS ═══ */}
+      <div style={{ marginTop:32,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16 }}>
+        {[
+          { icon:"⚡",title:"100% automatique",color:EM,desc:"Ingestion, classification IA, détection d'écarts, alertes, scoring fournisseurs, scraping indices, rapports PDF mensuels. Tout tourne en continu, jour et nuit." },
+          { icon:"👤",title:"Validation humaine ciblée",color:VL,desc:"Clauses de révision, escalades litiges, Go/No-Go. L'IA mâche le travail — le DAF confirme. Jamais de décision non validée." },
+          { icon:"⚙️",title:"Configurable sans code",color:AM,desc:"Règles de détection, poids du scoring, seuils d'alerte, indices suivis. Tout se modifie dans un fichier JSON — pas de développeur requis." },
+        ].map((p,i) => (
+          <div key={i} className="glass-hover" style={{ padding:20,borderRadius:14,background:`${p.color}04`,border:`1px solid ${p.color}12` }}>
+            <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:10 }}>
+              <span style={{ fontSize:18 }}>{p.icon}</span>
+              <span style={{ fontSize:13,fontWeight:700,color:p.color }}>{p.title}</span>
+            </div>
+            <div style={{ fontSize:11,color:S[400],lineHeight:1.7 }}>{p.desc}</div>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-function MockKPI({ label, value, color, small }) {
+function MockKPI({ label, value, color, sub }) {
   return (
-    <div style={{ padding:small?"10px":"14px",borderRadius:12,background:"rgba(30,41,59,0.6)",border:`1px solid ${S[800]}`,textAlign:"center",flex:1 }}>
-      <div style={{ fontSize:small?16:22,fontWeight:800,color }}>{value}</div>
-      <div style={{ fontSize:small?9:10,color:S[500],marginTop:2 }}>{label}</div>
+    <div className="kpi-card" style={{ padding:14,borderRadius:12,background:"rgba(30,41,59,0.6)",border:`1px solid ${S[800]}`,textAlign:"center",flex:1 }}>
+      <div style={{ fontSize:22,fontWeight:800,color }}>{value}</div>
+      <div style={{ fontSize:10,color:S[500],marginTop:2 }}>{label}</div>
+      {sub && <div style={{ fontSize:8,color:S[600],marginTop:1 }}>{sub}</div>}
     </div>
   );
 }
 
-function MockTable({ headers, rows, color }) {
+function MockTable({ headers, rows }) {
   return (
     <div style={{ borderRadius:10,overflow:"hidden",border:`1px solid ${S[800]}`,fontSize:11 }}>
       <div style={{ display:"grid",gridTemplateColumns:`repeat(${headers.length},1fr)`,background:S[850],padding:"8px 12px",gap:8 }}>
         {headers.map((h,i) => <div key={i} style={{ fontWeight:600,color:S[400] }}>{h}</div>)}
       </div>
       {rows.map((row,i) => (
-        <div key={i} style={{ display:"grid",gridTemplateColumns:`repeat(${headers.length},1fr)`,padding:"8px 12px",gap:8,borderTop:`1px solid ${S[850]}` }}>
+        <div key={i} style={{ display:"grid",gridTemplateColumns:`repeat(${headers.length},1fr)`,padding:"8px 12px",gap:8,borderTop:`1px solid ${S[850]}`,animation:`fadeInUp 0.3s ease ${i*0.05}s both` }}>
           {row.map((cell,j) => <div key={j} style={{ color: typeof cell === 'object' ? cell.color : S[300] }}>{typeof cell === 'object' ? cell.text : cell}</div>)}
         </div>
       ))}
@@ -497,195 +599,769 @@ function MockTable({ headers, rows, color }) {
   );
 }
 
-function CockpitPreview({ p }) {
-  const tabs = ["Savings & ROI","Conformité","Risque","Performance","Équipe","Prix","Spend Map"];
-  return (
-    <div>
-      <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
-        <span style={{ fontSize:20 }}>🎯</span>
-        <div><div style={{ fontSize:14,fontWeight:700,color:S[100] }}>Cockpit Dirigeant</div><div style={{ fontSize:10,color:S[500] }}>Vue stratégique de la performance achats</div></div>
+// ═══ COCKPIT DIRIGEANT ═══
+function CockpitPreview({ p, isETI }) {
+  const [subTab, setSubTab] = useState(0);
+  const tabs = ["Savings & ROI","Conformité","Risque","Performance","Équipe","Prix"];
+  const cd = p.modules["cockpit-daf"];
+
+  const TabContent = () => {
+    // ═══ TAB 0 — SAVINGS & ROI ═══
+    if (subTab === 0) return (
+      <div>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:16 }}>
+          <MockKPI label="Savings YTD" value={cd.savings} color={EM} sub="cumulés"/>
+          <MockKPI label="ROI plateforme" value={cd.roi} color={V} sub="annualisé"/>
+          <MockKPI label="Cash récupéré" value={isETI?"830K€":"28K€"} color={RD} sub="litiges"/>
+          <MockKPI label="Fuites évitées" value={isETI?"195K€":"11K€"} color={AM} sub="bloquées"/>
+        </div>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12 }}>
+          <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+            <div style={{ fontSize:10,color:S[500],marginBottom:10 }}>Savings par source</div>
+            {[{l:"Litiges récupérés",v:55,c:RD,m:isETI?"458K€":"15K€"},{l:"Fuites évitées",v:25,c:AM,m:isETI?"195K€":"11K€"},{l:"Hausses refusées",v:20,c:EM,m:isETI?"215K€":"6K€"}].map((b,i) => (
+              <div key={i} style={{ display:"flex",alignItems:"center",gap:8,marginBottom:8 }}>
+                <span style={{ fontSize:9,color:S[400],width:95 }}>{b.l}</span>
+                <div style={{ flex:1,height:6,borderRadius:3,background:S[800] }}><div style={{ height:"100%",borderRadius:3,width:`${b.v}%`,background:b.c,transition:"width 1s" }}/></div>
+                <span style={{ fontSize:10,color:b.c,width:46,textAlign:"right",fontWeight:600 }}>{b.m}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+            <div style={{ display:"flex",justifyContent:"space-between",marginBottom:8 }}>
+              <span style={{ fontSize:10,color:S[500] }}>Tendance savings 12 mois</span>
+              <span style={{ fontSize:10,color:EM,fontWeight:600 }}>{cd.trend}</span>
+            </div>
+            <Sparkline data={cd.sparkline} color={EM} width={200} height={60}/>
+          </div>
+        </div>
+        <div style={{ padding:12,borderRadius:10,background:"rgba(16,185,129,0.05)",border:`1px solid rgba(16,185,129,0.1)` }}>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16,textAlign:"center" }}>
+            <div>
+              <div style={{ fontSize:9,color:S[500] }}>Coût annuel Kanso</div>
+              <div style={{ fontSize:16,fontWeight:700,color:S[300] }}>{isETI?"17 880€":"5 880€"}</div>
+            </div>
+            <div>
+              <div style={{ fontSize:9,color:S[500] }}>Savings générés</div>
+              <div style={{ fontSize:16,fontWeight:700,color:EM }}>{cd.savings}</div>
+            </div>
+            <div>
+              <div style={{ fontSize:9,color:S[500] }}>Ratio investissement</div>
+              <div style={{ fontSize:16,fontWeight:700,color:V }}>{cd.roi}</div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div style={{ display:"flex",gap:8,marginBottom:16,flexWrap:"wrap" }}>
-        {tabs.map((t,i) => <span key={i} style={{ padding:"5px 10px",borderRadius:6,fontSize:10,fontWeight:i===0?700:400,background:i===0?`${V}20`:S[850],color:i===0?VL:S[500],border:`1px solid ${i===0?V+"30":"transparent"}` }}>{t}</span>)}
+    );
+
+    // ═══ TAB 1 — CONFORMITÉ ═══
+    if (subTab === 1) return (
+      <div>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:16 }}>
+          <MockKPI label="Sous contrat" value="87%" color={CY} sub={`${isETI?"244":"33"} fournisseurs`}/>
+          <MockKPI label="Hors contrat" value={isETI?"14":"2"} color={RD} sub={`> 10K€/an`}/>
+          <MockKPI label="Certifs valides" value={isETI?"92%":"88%"} color={EM} sub="du panel"/>
+          <MockKPI label="Expirations 30j" value={isETI?"7":"2"} color={AM} sub="à renouveler"/>
+        </div>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12 }}>
+          <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+            <div style={{ fontSize:10,color:S[500],marginBottom:10 }}>Couverture contrats</div>
+            <div style={{ display:"flex",alignItems:"center",gap:12 }}>
+              <DonutChart value={87} color={CY} size={72} strokeWidth={7}/>
+              <div>
+                {[{l:"Sous contrat cadre",v:isETI?"244":"33",c:CY},{l:"Hors contrat > 10K€",v:isETI?"14":"2",c:RD},{l:"Hors contrat < 10K€",v:isETI?"22":"3",c:S[500]}].map((r,i) => (
+                  <div key={i} style={{ display:"flex",alignItems:"center",gap:6,marginBottom:4,fontSize:10 }}>
+                    <span style={{ width:6,height:6,borderRadius:"50%",background:r.c,flexShrink:0 }}/>
+                    <span style={{ color:S[400] }}>{r.l}</span>
+                    <span style={{ fontWeight:600,color:r.c,marginLeft:"auto" }}>{r.v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+            <div style={{ fontSize:10,color:S[500],marginBottom:10 }}>Taux de conformité 12 mois</div>
+            <Sparkline data={[62,65,68,71,74,76,78,80,82,84,86,87]} color={CY} width={200} height={60}/>
+            <div style={{ display:"flex",justifyContent:"space-between",marginTop:6 }}>
+              <span style={{ fontSize:9,color:S[600] }}>janv. (62%)</span>
+              <span style={{ fontSize:9,color:CY,fontWeight:600 }}>fév. (87%)</span>
+            </div>
+          </div>
+        </div>
+        <div style={{ padding:10,borderRadius:8,background:"rgba(6,182,212,0.06)",fontSize:11,color:S[400],textAlign:"center" }}>
+          🎯 Objectif : 90% de conformité à 12 mois · Progression : +25 pts depuis le lancement
+        </div>
       </div>
-      <div style={{ display:"flex",gap:12,marginBottom:16 }}>
-        <MockKPI label="Savings YTD" value={p.modules["cockpit-daf"].savings} color={EM}/>
-        <MockKPI label="ROI" value={p.modules["cockpit-daf"].roi} color={V}/>
-        <MockKPI label="Conformité" value="87%" color={CY}/>
-        <MockKPI label="Score panel" value="82/100" color={AM}/>
+    );
+
+    // ═══ TAB 2 — RISQUE ═══
+    if (subTab === 2) return (
+      <div>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:16 }}>
+          <MockKPI label="Score panel" value={isETI?"76":"72"} color={V} sub="/100 moyen"/>
+          <MockKPI label="Fournisseurs critiques" value={isETI?"18":"3"} color={RD} sub="score < 50"/>
+          <MockKPI label="Dépendances" value={isETI?"6":"1"} color={AM} sub="> 25%"/>
+          <MockKPI label="Alertes actives" value={isETI?"42":"5"} color={AM} sub="à traiter"/>
+        </div>
+        <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}`,marginBottom:12 }}>
+          <div style={{ fontSize:10,color:S[500],marginBottom:10 }}>Répartition du panel par niveau de risque</div>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10 }}>
+            {[
+              {level:"Minimal",range:"80-100",count:isETI?"112":"14",pct:isETI?"40%":"37%",c:EM},
+              {level:"Faible",range:"60-79",count:isETI?"98":"15",pct:isETI?"35%":"39%",c:CY},
+              {level:"Moyen",range:"40-59",count:isETI?"52":"6",pct:isETI?"19%":"16%",c:AM},
+              {level:"Élevé",range:"< 40",count:isETI?"18":"3",pct:isETI?"6%":"8%",c:RD},
+            ].map((r,i) => (
+              <div key={i} style={{ textAlign:"center",padding:12,borderRadius:10,background:`${r.c}06`,border:`1px solid ${r.c}10` }}>
+                <div style={{ fontSize:20,fontWeight:800,color:r.c }}>{r.count}</div>
+                <div style={{ fontSize:10,fontWeight:600,color:S[300],marginTop:2 }}>{r.level}</div>
+                <div style={{ fontSize:9,color:S[500] }}>score {r.range}</div>
+                <div style={{ fontSize:9,color:r.c,fontWeight:600,marginTop:2 }}>{r.pct} du panel</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+          <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+            <div style={{ fontSize:10,color:S[500],marginBottom:8 }}>Top 3 fournisseurs à risque</div>
+            {[
+              {name:"PROTO Mécanique",score:54,issue:"ISO 9001 expirée"},
+              {name:isETI?"HARTMANN Ind.":"DELRIN Compo.",score:isETI?42:48,issue:"Dépendance 29%"},
+              {name:isETI?"VEGA Plastiques":"NEXON Plast.",score:isETI?38:45,issue:"3 litiges ouverts"},
+            ].map((f,i) => (
+              <div key={i} style={{ display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderTop:i?`1px solid ${S[850]}`:"none" }}>
+                <span style={{ fontSize:14,fontWeight:800,color:f.score<50?RD:AM,width:24 }}>{f.score}</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:10,fontWeight:600,color:S[300] }}>{f.name}</div>
+                  <div style={{ fontSize:9,color:S[500] }}>{f.issue}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+            <div style={{ fontSize:10,color:S[500],marginBottom:8 }}>Score panel 12 mois</div>
+            <Sparkline data={p.modules["supplier-watchtower"].sparkline} color={V} width={200} height={60}/>
+            <div style={{ display:"flex",justifyContent:"space-between",marginTop:6 }}>
+              <span style={{ fontSize:9,color:S[600] }}>janv.</span>
+              <span style={{ fontSize:9,color:V,fontWeight:600 }}>↗ Tendance haussière</span>
+            </div>
+          </div>
+        </div>
       </div>
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
-        <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
-          <div style={{ fontSize:10,color:S[500],marginBottom:8 }}>Savings par source</div>
-          {[{l:"Litiges",v:55,c:RD},{l:"Fuites évitées",v:25,c:AM},{l:"Hausses refusées",v:20,c:EM}].map((b,i) => (
-            <div key={i} style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
-              <span style={{ fontSize:9,color:S[400],width:80 }}>{b.l}</span>
-              <div style={{ flex:1,height:6,borderRadius:3,background:S[800] }}><div style={{ height:"100%",borderRadius:3,width:`${b.v}%`,background:b.c }}/></div>
-              <span style={{ fontSize:9,color:b.c,width:24,textAlign:"right" }}>{b.v}%</span>
+    );
+
+    // ═══ TAB 3 — PERFORMANCE ACHATS ═══
+    if (subTab === 3) return (
+      <div>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:16 }}>
+          <MockKPI label="Litiges résolus" value={isETI?"78%":"74%"} color={EM} sub="taux de clôture"/>
+          <MockKPI label="Délai moyen" value={isETI?"22j":"18j"} color={CY} sub="résolution"/>
+          <MockKPI label="Docs traités" value={isETI?"15,4K":"1 840"} color={V} sub="par le Data Vault"/>
+          <MockKPI label="Alertes traitées" value={isETI?"89%":"85%"} color={EM} sub="dans les 72h"/>
+        </div>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12 }}>
+          <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+            <div style={{ fontSize:10,color:S[500],marginBottom:10 }}>KPIs opérationnels vs objectifs</div>
+            {[
+              {l:"Taux de récupération",actual:isETI?78:74,target:75,c:EM},
+              {l:"Délai résolution",actual:isETI?82:85,target:80,c:CY},
+              {l:"Conformité panel",actual:87,target:90,c:V},
+              {l:"Alertes < 72h",actual:isETI?89:85,target:85,c:AM},
+            ].map((k,i) => (
+              <div key={i} style={{ marginBottom:10 }}>
+                <div style={{ display:"flex",justifyContent:"space-between",marginBottom:4 }}>
+                  <span style={{ fontSize:10,color:S[400] }}>{k.l}</span>
+                  <span style={{ fontSize:10,fontWeight:600,color:k.actual>=k.target?EM:AM }}>{k.actual}% <span style={{ color:S[600],fontWeight:400 }}>/ obj. {k.target}%</span></span>
+                </div>
+                <div style={{ position:"relative",height:6,borderRadius:3,background:S[800] }}>
+                  <div style={{ height:"100%",borderRadius:3,width:`${k.actual}%`,background:k.actual>=k.target?EM:AM,transition:"width 1s" }}/>
+                  <div style={{ position:"absolute",top:-2,left:`${k.target}%`,width:2,height:10,background:S[400],borderRadius:1 }}/>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+            <div style={{ fontSize:10,color:S[500],marginBottom:8 }}>Volume traité par module / mois</div>
+            {[
+              {mod:"Coffre-Fort",icon:"🗄️",v:isETI?1240:152,max:isETI?1500:200,c:CY},
+              {mod:"Récupération Cash",icon:"⚔️",v:isETI?47:8,max:isETI?60:15,c:RD},
+              {mod:"Contrôle Factures",icon:"🔍",v:isETI?89:12,max:isETI?120:20,c:AM},
+              {mod:"Pilotage Fourn.",icon:"🏰",v:isETI?280:38,max:isETI?300:50,c:V},
+              {mod:"Veille Marchés",icon:"📡",v:isETI?42:14,max:isETI?50:20,c:EM},
+            ].map((m,i) => (
+              <div key={i} style={{ display:"flex",alignItems:"center",gap:8,marginBottom:8 }}>
+                <span style={{ fontSize:10,width:12 }}>{m.icon}</span>
+                <span style={{ fontSize:9,color:S[400],width:90 }}>{m.mod}</span>
+                <div style={{ flex:1,height:5,borderRadius:3,background:S[800] }}><div style={{ height:"100%",borderRadius:3,width:`${(m.v/m.max)*100}%`,background:m.c,transition:"width 1s" }}/></div>
+                <span style={{ fontSize:9,color:m.c,fontWeight:600,width:32,textAlign:"right" }}>{m.v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+
+    // ═══ TAB 4 — ÉQUIPE (admin only) ═══
+    if (subTab === 4) return (
+      <div>
+        <div style={{ padding:10,borderRadius:8,background:"rgba(139,92,246,0.06)",border:`1px solid rgba(139,92,246,0.1)`,marginBottom:16,display:"flex",alignItems:"center",gap:8 }}>
+          <span style={{ fontSize:12 }}>🔒</span>
+          <span style={{ fontSize:10,color:VL,fontWeight:600 }}>Vue réservée admin (DAF / CPO)</span>
+          <span style={{ fontSize:10,color:S[500] }}>— Comparaison par acheteur</span>
+        </div>
+        <div style={{ borderRadius:10,overflow:"hidden",border:`1px solid ${S[800]}`,fontSize:11,marginBottom:12 }}>
+          <div style={{ display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 1fr",background:S[850],padding:"8px 12px",gap:8 }}>
+            {["Acheteur","Litiges","Taux récup.","Délai moy.","Alertes < 72h","Score"].map((h,i) => <div key={i} style={{ fontWeight:600,color:S[400] }}>{h}</div>)}
+          </div>
+          {[
+            {name:isETI?"Marie Dupont":"Marie D.",litiges:isETI?"72":"8",taux:"82%",delai:"19j",alertes:"94%",score:88,best:true},
+            {name:isETI?"Thomas Martin":"Thomas M.",litiges:isETI?"68":"6",taux:"76%",delai:"24j",alertes:"87%",score:79},
+            {name:isETI?"Julie Bernard":"Julie B.",litiges:isETI?"54":"5",taux:"71%",delai:"28j",alertes:"78%",score:68},
+            ...(isETI?[{name:"Lucas Petit",litiges:"53",taux:"69%",delai:"31j",alertes:"72%",score:62}]:[]),
+          ].map((a,i) => (
+            <div key={i} style={{ display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 1fr",padding:"10px 12px",gap:8,borderTop:`1px solid ${S[850]}`,background:a.best?"rgba(16,185,129,0.03)":"transparent" }}>
+              <div style={{ display:"flex",alignItems:"center",gap:6 }}>
+                <div style={{ width:24,height:24,borderRadius:"50%",background:`${V}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:VL }}>{a.name.charAt(0)}</div>
+                <span style={{ color:S[200],fontWeight:a.best?600:400 }}>{a.name}</span>
+                {a.best && <span style={{ fontSize:8,padding:"1px 6px",borderRadius:4,background:"rgba(16,185,129,0.1)",color:EM,fontWeight:600 }}>Top</span>}
+              </div>
+              <div style={{ color:S[300] }}>{a.litiges}</div>
+              <div style={{ color:parseInt(a.taux)>=75?EM:AM,fontWeight:600 }}>{a.taux}</div>
+              <div style={{ color:parseInt(a.delai)<=22?EM:parseInt(a.delai)<=26?AM:RD }}>{a.delai}</div>
+              <div style={{ color:parseInt(a.alertes)>=85?EM:AM }}>{a.alertes}</div>
+              <div>
+                <div style={{ display:"flex",alignItems:"center",gap:4 }}>
+                  <div style={{ flex:1,height:4,borderRadius:2,background:S[800] }}><div style={{ height:"100%",borderRadius:2,width:`${a.score}%`,background:a.score>=80?EM:a.score>=65?AM:RD }}/></div>
+                  <span style={{ fontSize:10,fontWeight:700,color:a.score>=80?EM:a.score>=65?AM:RD }}>{a.score}</span>
+                </div>
+              </div>
             </div>
           ))}
         </div>
-        <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
-          <div style={{ fontSize:10,color:S[500],marginBottom:8 }}>Tendance 12 mois</div>
-          <Sparkline data={p.modules["cockpit-daf"].sparkline} color={EM} width={200} height={60}/>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+          <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+            <div style={{ fontSize:10,color:S[500],marginBottom:8 }}>Répartition litiges par acheteur</div>
+            {[
+              {name:isETI?"Marie D.":"Marie",v:isETI?72:8,c:EM},
+              {name:isETI?"Thomas M.":"Thomas",v:isETI?68:6,c:CY},
+              {name:isETI?"Julie B.":"Julie",v:isETI?54:5,c:V},
+              ...(isETI?[{name:"Lucas P.",v:53,c:AM}]:[]),
+            ].map((a,i) => (
+              <div key={i} style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
+                <span style={{ fontSize:9,color:S[400],width:60 }}>{a.name}</span>
+                <div style={{ flex:1,height:5,borderRadius:3,background:S[800] }}><div style={{ height:"100%",borderRadius:3,width:`${(a.v/(isETI?80:10))*100}%`,background:a.c }}/></div>
+                <span style={{ fontSize:9,color:a.c,fontWeight:600,width:20,textAlign:"right" }}>{a.v}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+            <div style={{ fontSize:10,color:S[500],marginBottom:8 }}>Score par acheteur — tendance 6 mois</div>
+            <Sparkline data={[72,74,77,80,84,88]} color={EM} width={90} height={30}/>
+            <div style={{ fontSize:9,color:S[500],marginTop:4 }}>{isETI?"Marie Dupont":"Marie D."} — meilleure progression</div>
+            <div style={{ marginTop:8 }}/>
+            <Sparkline data={[75,73,72,70,68,62]} color={RD} width={90} height={30}/>
+            <div style={{ fontSize:9,color:S[500],marginTop:4 }}>{isETI?"Lucas Petit":"Julie B."} — nécessite un accompagnement</div>
+          </div>
         </div>
       </div>
+    );
+
+    // ═══ TAB 5 — PRESSION PRIX ═══
+    if (subTab === 5) return (
+      <div>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:16 }}>
+          <MockKPI label="Catégories suivies" value={isETI?"12":"6"} color={EM} sub="avec indices"/>
+          <MockKPI label="Hausse moy. marché" value="+4,2%" color={AM} sub="pondérée"/>
+          <MockKPI label="Hausse moy. demandée" value="+7,8%" color={RD} sub="fournisseurs"/>
+          <MockKPI label="Écart injustifié" value="3,6 pts" color={EM} sub="levier négo"/>
+        </div>
+        <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}`,marginBottom:12 }}>
+          <div style={{ fontSize:10,color:S[500],marginBottom:12 }}>Carte de pression par catégorie</div>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(100px, 1fr))",gap:8 }}>
+            {[
+              {cat:"Acier",delta:"+14%",asked:"+22%",level:"Chaud",c:RD,emoji:"🔴"},
+              {cat:"Électronique",delta:"+5%",asked:"+11%",level:"Tiède",c:AM,emoji:"🟠"},
+              {cat:"Plastique",delta:"+1%",asked:"+6%",level:"Froid",c:EM,emoji:"🟢"},
+              {cat:"Emballage",delta:"-3%",asked:"+4%",level:"Baisse",c:CY,emoji:"🔵"},
+              ...(isETI?[
+                {cat:"Chimie",delta:"+8%",asked:"+15%",level:"Chaud",c:RD,emoji:"🔴"},
+                {cat:"Transport",delta:"+3%",asked:"+9%",level:"Tiède",c:AM,emoji:"🟠"},
+              ]:[]),
+            ].map((x,i) => (
+              <div key={i} style={{ textAlign:"center",padding:12,borderRadius:10,background:`${x.c}06`,border:`1px solid ${x.c}10` }}>
+                <div style={{ fontSize:9,color:S[500] }}>{x.emoji} {x.level}</div>
+                <div style={{ fontSize:12,fontWeight:700,color:S[200],margin:"4px 0" }}>{x.cat}</div>
+                <div style={{ fontSize:18,fontWeight:800,color:x.c }}>{x.delta}</div>
+                <div style={{ fontSize:8,color:S[600],marginTop:2 }}>marché réel</div>
+                <div style={{ width:"100%",height:1,background:S[800],margin:"6px 0" }}/>
+                <div style={{ fontSize:10,color:RD,fontWeight:600 }}>{x.asked}</div>
+                <div style={{ fontSize:8,color:S[600] }}>demandé fournisseurs</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+          <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+            <div style={{ fontSize:10,color:S[500],marginBottom:8 }}>Indice acier (base 100) — 12 mois</div>
+            <Sparkline data={[100,102,105,108,110,109,111,114,118,122,128,134]} color={RD} width={200} height={60}/>
+            <div style={{ display:"flex",justifyContent:"space-between",marginTop:6 }}>
+              <span style={{ fontSize:9,color:S[600] }}>mars 2025</span>
+              <span style={{ fontSize:9,color:RD,fontWeight:600 }}>+34% sur 12 mois</span>
+            </div>
+          </div>
+          <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+            <div style={{ fontSize:10,color:S[500],marginBottom:8 }}>Indice plastique — 12 mois</div>
+            <Sparkline data={[100,101,102,103,102,101,100,100,101,101,100,101]} color={EM} width={200} height={60}/>
+            <div style={{ display:"flex",justifyContent:"space-between",marginTop:6 }}>
+              <span style={{ fontSize:9,color:S[600] }}>mars 2025</span>
+              <span style={{ fontSize:9,color:EM,fontWeight:600 }}>+1% — stable</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+
+    return null;
+  };
+
+  return (
+    <div>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
+        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+          <span style={{ fontSize:20 }}>🎯</span>
+          <div><div style={{ fontSize:14,fontWeight:700,color:S[100] }}>Cockpit Dirigeant</div><div style={{ fontSize:10,color:S[500] }}>Vue stratégique de la performance achats</div></div>
+        </div>
+        <div style={{ display:"flex",alignItems:"center",gap:6,fontSize:10,color:S[500] }}>
+          <PulseDot color={EM} size={5}/> Données temps réel
+        </div>
+      </div>
+      <div style={{ display:"flex",gap:6,marginBottom:16,flexWrap:"wrap" }}>
+        {tabs.map((t,i) => <button key={i} onClick={() => setSubTab(i)} style={{ padding:"5px 10px",borderRadius:6,fontSize:10,fontWeight:subTab===i?700:400,background:subTab===i?`${V}20`:S[850],color:subTab===i?VL:S[500],border:`1px solid ${subTab===i?V+"30":"transparent"}`,cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s" }}>{t}</button>)}
+      </div>
+
+      <div key={subTab} style={{ animation:"fadeInUp 0.3s ease" }}>
+        <TabContent/>
+      </div>
+
+      {/* Report block */}
+      <div style={{ padding:12,borderRadius:10,background:"rgba(139,92,246,0.05)",border:`1px solid rgba(139,92,246,0.1)`,display:"flex",alignItems:"center",gap:10,marginTop:16 }}>
+        <span style={{ fontSize:14 }}>📄</span>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:11,fontWeight:600,color:S[200] }}>Rapport mensuel — Février 2026</div>
+          <div style={{ fontSize:10,color:S[500] }}>PDF auto · 4 pages · Couvre les 6 onglets · Fait marquant IA</div>
+        </div>
+        <span style={{ padding:"4px 10px",borderRadius:6,fontSize:10,fontWeight:600,background:"rgba(139,92,246,0.15)",color:VL,cursor:"pointer" }}>Télécharger</span>
+      </div>
+
+      <ModuleFooter
+        activities={[
+          { time:"06:01",icon:"📊",text:"Snapshot mensuel : 6 onglets calculés depuis tous les modules",type:"auto" },
+          { time:"06:02",icon:"📄",text:"Rapport PDF généré (4 pages) — fait marquant IA : acier +14%, 4 fournisseurs impactés",type:"auto" },
+          { time:"08:15",icon:"📧",text:"Rapport envoyé à la direction (destinataires configurés dans cockpit_config.json)",type:"auto" },
+          { time:"09:00",icon:"👤",text:"DAF consulte l'onglet Équipe — note la progression de Marie (+12 pts en 6 mois)",type:"human" },
+        ]}
+        configs={[
+          { label:"Objectif savings",value:isETI?"1,5M€":"60K€",color:EM },
+          { label:"Objectif conformité",value:"90%",color:CY },
+          { label:"Objectif délai",value:"< 30j",color:V },
+          { label:"Destinataires",value:isETI?"3":"1",color:V },
+          { label:"Snapshot",value:"1er/mois",color:CY },
+          { label:"Fait IA",value:"activé",color:EM },
+        ]}
+        configFile="cockpit_config.json"
+      />
     </div>
   );
 }
 
-function LKPreview({ p }) {
+// ═══ RÉCUPÉRATION CASH ═══
+function LKPreview({ p, isETI }) {
   return (
     <div>
-      <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
-        <span style={{ fontSize:20 }}>⚔️</span>
-        <div><div style={{ fontSize:14,fontWeight:700,color:S[100] }}>Récupération Cash</div><div style={{ fontSize:10,color:S[500] }}>Détection des écarts — Récupération automatisée</div></div>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
+        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+          <span style={{ fontSize:20 }}>⚔️</span>
+          <div><div style={{ fontSize:14,fontWeight:700,color:S[100] }}>Récupération Cash</div><div style={{ fontSize:10,color:S[500] }}>Détection automatique — Graduation Diplomatique</div></div>
+        </div>
+        <div style={{ fontSize:10,color:S[500],display:"flex",alignItems:"center",gap:4 }}><PulseDot color={RD} size={5}/> {isETI?"247":"19"} écarts actifs</div>
       </div>
-      <div style={{ display:"flex",gap:12,marginBottom:16 }}>
+
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:16 }}>
         <MockKPI label="Écarts détectés" value={p.modules["litige-killer"].detected} color={RD}/>
         <MockKPI label="Cash récupéré" value={p.modules["litige-killer"].recovered} color={EM}/>
         <MockKPI label="Taux récup." value={p.modules["litige-killer"].rate} color={V}/>
+        <MockKPI label="Délai moyen" value={isETI?"22j":"18j"} color={CY}/>
       </div>
+
+      {/* Graduation pipeline */}
+      <div style={{ padding:12,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}`,marginBottom:12 }}>
+        <div style={{ fontSize:10,color:S[500],marginBottom:10 }}>Pipeline Graduation Diplomatique</div>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8 }}>
+          {[
+            {step:"Soft Check",count:isETI?42:3,color:AM,desc:"Email courtois + preuves"},
+            {step:"Relance",count:isETI?18:2,color:AM,desc:"Rappel formel"},
+            {step:"Escalade DAF",count:isETI?8:1,color:RD,desc:"Direction impliquée"},
+            {step:"Compensation",count:isETI?3:0,color:RS,desc:"Déduction sur facture"},
+          ].map((s,i) => (
+            <div key={i} style={{ textAlign:"center",padding:10,borderRadius:8,background:`${s.color}06`,border:`1px solid ${s.color}10` }}>
+              <div style={{ fontSize:18,fontWeight:800,color:s.color }}>{s.count}</div>
+              <div style={{ fontSize:9,fontWeight:600,color:S[300] }}>{s.step}</div>
+              <div style={{ fontSize:8,color:S[600],marginTop:1 }}>{s.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <MockTable
-        headers={["Fournisseur","Règle","Écart","Montant","Statut"]}
+        headers={["Fournisseur","Règle","Écart","Montant","Phase","Depuis"]}
         rows={[
-          ["ACME Industries","R1 — Écart prix","+12%",{text:"15 280€",color:RD},{text:"⏳ En cours",color:AM}],
-          ["DELRIN Compo.","R2 — Erreur virgule","×10",{text:"8 450€",color:RD},{text:"✅ Résolu",color:EM}],
-          ["PROTO Méca.","R3 — Doublon","100%",{text:"3 200€",color:RD},{text:"✅ Auto-résolu",color:EM}],
-          ["SIGMA Elect.","R4 — Hors grille","+22%",{text:"6 780€",color:RD},{text:"🔴 Escalade",color:RS}],
+          ["ACME Industries","R1 — Écart prix","+12%",{text:"15 280€",color:RD},{text:"Soft Check",color:AM},"3j"],
+          ["DELRIN Compo.","R2 — Err. virgule","×10",{text:"8 450€",color:RD},{text:"✅ Résolu",color:EM},"—"],
+          ["PROTO Méca.","R3 — Doublon","100%",{text:"3 200€",color:RD},{text:"✅ Auto-résolu",color:EM},"—"],
+          ["SIGMA Elect.","R4 — Hors grille","+22%",{text:"6 780€",color:RD},{text:"🔴 Escalade",color:RS},"14j"],
+          ...(isETI?[["BERTIN Ind.","R1 — Écart prix","+8%",{text:"22 100€",color:RD},{text:"Relance",color:AM},"7j"]]:[]),
         ]}
+      />
+
+      <ModuleFooter
+        activities={[
+          { time:"02:00",icon:"🔍",text:`Scan automatique — ${isETI?"178":"12"} factures analysées vs contrats en vigueur`,type:"auto" },
+          { time:"02:01",icon:"🚨",text:`${isETI?"3 nouveaux":"1 nouvel"} écart(s) détecté(s) — liasses de preuve générées`,type:"auto" },
+          { time:"08:30",icon:"📧",text:"Soft Check envoyé à ACME — email courtois + PDF preuves joint",type:"auto" },
+          { time:"09:00",icon:"⏫",text:"SIGMA : pas de réponse 14j → auto-graduation vers Escalade DAF",type:"auto" },
+          { time:"11:20",icon:"✅",text:"PROTO : avoir reçu dans le Coffre-Fort → litige auto-résolu (3 200€)",type:"auto" },
+          { time:"14:30",icon:"👤",text:"DAF valide l'escalade SIGMA — compensation sur prochaine facture",type:"human" },
+        ]}
+        configs={[
+          { label:"Seuil R1",value:"écart > 2%",color:RD },
+          { label:"R2 virgule",value:"×5 min",color:RD },
+          { label:"Soft Check",value:"auto J+1",color:AM },
+          { label:"Escalade",value:"auto J+14",color:RS },
+          { label:"Templates",value:"3 paliers",color:V },
+        ]}
+        configFile="detection_config.json"
       />
     </div>
   );
 }
 
-function IWPreview({ p }) {
+// ═══ CONTRÔLE FACTURES ═══
+function IWPreview({ p, isETI }) {
   return (
     <div>
-      <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
-        <span style={{ fontSize:20 }}>🔍</span>
-        <div><div style={{ fontSize:14,fontWeight:700,color:S[100] }}>Contrôle Factures</div><div style={{ fontSize:10,color:S[500] }}>Alertes temps réel — Avant paiement</div></div>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
+        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+          <span style={{ fontSize:20 }}>🔍</span>
+          <div><div style={{ fontSize:14,fontWeight:700,color:S[100] }}>Contrôle Factures</div><div style={{ fontSize:10,color:S[500] }}>Détection temps réel — Avant paiement</div></div>
+        </div>
+        <div style={{ fontSize:10,color:S[500],display:"flex",alignItems:"center",gap:4 }}><PulseDot color={AM} size={5}/> Surveillance continue</div>
       </div>
-      <div style={{ display:"flex",gap:12,marginBottom:16 }}>
+
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:16 }}>
         <MockKPI label="Bloquées" value={p.modules["invoice-watchdog"].blocked} color={AM}/>
         <MockKPI label="Fuites évitées" value={p.modules["invoice-watchdog"].saved} color={EM}/>
-        <MockKPI label="Délai détection" value={p.modules["invoice-watchdog"].realtime} color={CY}/>
+        <MockKPI label="Détection" value={p.modules["invoice-watchdog"].realtime} color={CY}/>
+        <MockKPI label="Validées OK" value={isETI?"1 247":"156"} color={EM} sub="sans anomalie"/>
       </div>
-      <div style={{ padding:12,borderRadius:10,background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.15)",marginBottom:12,display:"flex",alignItems:"center",gap:10 }}>
-        <span style={{ fontSize:16 }}>🚨</span>
-        <div>
-          <div style={{ fontSize:12,fontWeight:700,color:RD }}>Alerte temps réel — Paiement bloqué</div>
-          <div style={{ fontSize:10,color:S[400] }}>FA-2026-0847 · ACME Industries · Écart prix +12% · Impact 15 280€</div>
+
+      {/* Live alert */}
+      <div style={{ padding:14,borderRadius:12,background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.15)",marginBottom:12,animation:"breathe 3s ease-in-out infinite" }}>
+        <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:8 }}>
+          <PulseDot color={RD} size={8}/>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:13,fontWeight:700,color:RD }}>Alerte temps réel — Paiement bloqué</div>
+            <div style={{ fontSize:10,color:S[400],marginTop:2 }}>FA-2026-0847 · ACME Industries · +12% vs contrat · 15 280€</div>
+          </div>
         </div>
-        <div style={{ marginLeft:"auto",display:"flex",gap:6 }}>
-          <span style={{ padding:"4px 10px",borderRadius:6,fontSize:10,fontWeight:600,background:"rgba(239,68,68,0.15)",color:RD }}>Bloquer</span>
-          <span style={{ padding:"4px 10px",borderRadius:6,fontSize:10,fontWeight:600,background:"rgba(16,185,129,0.15)",color:EM }}>Valider</span>
+        <div style={{ display:"flex",gap:8,marginLeft:22 }}>
+          {[{l:"🚫 Confirmer blocage",c:RD},{l:"✅ Valider paiement",c:EM},{l:"↗️ Transférer au LK",c:V}].map((b,i) => (
+            <span key={i} style={{ padding:"5px 12px",borderRadius:8,fontSize:10,fontWeight:600,background:`${b.c}15`,color:b.c,cursor:"pointer" }}>{b.l}</span>
+          ))}
         </div>
       </div>
+
       <MockTable
-        headers={["Facture","Fournisseur","Anomalie","Impact","Action"]}
+        headers={["Facture","Fournisseur","Anomalie","Impact","Décision","Quand"]}
         rows={[
-          ["FA-2026-0912","PROTO Méca.","Doublon",{text:"3 200€",color:AM},{text:"🔴 Bloqué",color:RD}],
-          ["FA-2026-0908","SIGMA Elect.","Hors grille",{text:"1 890€",color:AM},{text:"✅ Validé",color:EM}],
-          ["FA-2026-0901","ACME Ind.","Écart prix",{text:"5 670€",color:AM},{text:"↗️ Transf. LK",color:V}],
+          ["FA-2026-0912","PROTO Méca.","Doublon suspect",{text:"3 200€",color:AM},{text:"🔴 Bloqué",color:RD},"Il y a 2h"],
+          ["FA-2026-0908","SIGMA Elect.","Hors grille +15%",{text:"1 890€",color:AM},{text:"✅ Validé",color:EM},"Hier 16h"],
+          ["FA-2026-0901","ACME Ind.","Écart prix +12%",{text:"5 670€",color:AM},{text:"↗️ Transféré",color:V},"Hier 09h"],
+          ["FA-2026-0895","BERTIN Ind.","Qté ≠ BDC",{text:"890€",color:AM},{text:"✅ Auto-résolu",color:EM},"Lundi"],
+          ...(isETI?[["FA-2026-0887","NEXON Plast.","R2 Virgule ×10",{text:"14 300€",color:AM},{text:"🔴 Bloqué",color:RD},"Lundi"]]:[]),
         ]}
+      />
+
+      <ModuleFooter
+        activities={[
+          { time:"07:12",icon:"📨",text:"Nouvelle facture ACME reçue dans le Coffre-Fort → analyse automatique",type:"auto" },
+          { time:"07:12",icon:"🚨",text:"Anomalie détectée en 1,4s : +12% vs contrat → paiement bloqué automatiquement",type:"auto" },
+          { time:"07:13",icon:"📋",text:"Liasse de preuve PDF générée : contrat + facture + historique prix",type:"auto" },
+          { time:"10:00",icon:"👤",text:"DAF confirme le blocage ACME → transféré au module Récupération Cash",type:"human" },
+          { time:"14:20",icon:"✅",text:"BERTIN : avoir correspondant arrivé → alerte auto-résolue (890€)",type:"auto" },
+        ]}
+        configs={[
+          { label:"Blocage auto",value:"écart > 2%",color:RD },
+          { label:"Doublon",value:"même ref + 30j",color:AM },
+          { label:"Notif",value:"email + dashboard",color:V },
+          { label:"Auto-resolve",value:"avoir ± 5%",color:EM },
+        ]}
+        configFile="iw_config.json"
       />
     </div>
   );
 }
 
-function SWPreview({ p }) {
+// ═══ PILOTAGE FOURNISSEURS ═══
+function SWPreview({ p, isETI }) {
   return (
     <div>
-      <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
-        <span style={{ fontSize:20 }}>🏰</span>
-        <div><div style={{ fontSize:14,fontWeight:700,color:S[100] }}>Pilotage Fournisseurs</div><div style={{ fontSize:10,color:S[500] }}>Scoring fournisseurs & alertes panel</div></div>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
+        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+          <span style={{ fontSize:20 }}>🏰</span>
+          <div><div style={{ fontSize:14,fontWeight:700,color:S[100] }}>Pilotage Fournisseurs</div><div style={{ fontSize:10,color:S[500] }}>Scoring 5 axes — Alertes — Briefing pré-RDV</div></div>
+        </div>
+        <div style={{ fontSize:10,color:S[500],display:"flex",alignItems:"center",gap:4 }}><PulseDot color={V} size={5}/> Score recalculé chaque nuit</div>
       </div>
-      <div style={{ display:"flex",gap:12,marginBottom:16 }}>
+
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:16 }}>
         <MockKPI label="Fournisseurs" value={p.modules["supplier-watchtower"].suppliers} color={V}/>
-        <MockKPI label="Alertes" value={p.modules["supplier-watchtower"].alerts} color={AM}/>
+        <MockKPI label="Alertes actives" value={p.modules["supplier-watchtower"].alerts} color={AM}/>
         <MockKPI label="Hors contrat" value={p.modules["supplier-watchtower"].horsContrat} color={RD}/>
+        <MockKPI label="Score moyen" value={isETI?"76":"72"} color={V} sub="/100"/>
       </div>
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12 }}>
+
+      {/* Supplier cards with 5-axis mini bars */}
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12 }}>
         {[
-          {name:"ACME Industries",score:82,trend:"+3",risk:"Faible"},
-          {name:"PROTO Mécanique",score:54,trend:"-8",risk:"Élevé"},
-          {name:"SIGMA Électronique",score:91,trend:"+1",risk:"Minimal"},
-          {name:"DELRIN Composants",score:67,trend:"-2",risk:"Moyen"},
+          {name:"ACME Industries",score:82,trend:"+3",axes:[90,72,85,88,78],spend:isETI?"2,4M€":"42K€"},
+          {name:"PROTO Mécanique",score:54,trend:"-8",axes:[42,38,72,55,62],spend:isETI?"890K€":"18K€"},
+          {name:"SIGMA Électronique",score:91,trend:"+1",axes:[95,92,82,94,90],spend:isETI?"3,1M€":"56K€"},
+          {name:"DELRIN Composants",score:67,trend:"-2",axes:[78,55,48,72,80],spend:isETI?"1,6M€":"28K€"},
         ].map((f,i) => (
-          <div key={i} style={{ padding:12,borderRadius:10,background:"rgba(30,41,59,0.5)",border:`1px solid ${S[800]}`,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-            <div>
-              <div style={{ fontSize:11,fontWeight:600,color:S[200] }}>{f.name}</div>
-              <div style={{ fontSize:9,color:f.risk==="Faible"||f.risk==="Minimal"?EM:f.risk==="Moyen"?AM:RD,marginTop:2 }}>Risque {f.risk}</div>
+          <div key={i} style={{ padding:14,borderRadius:12,background:"rgba(30,41,59,0.5)",border:`1px solid ${S[800]}` }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10 }}>
+              <div>
+                <div style={{ fontSize:12,fontWeight:700,color:S[200] }}>{f.name}</div>
+                <div style={{ fontSize:9,color:S[500] }}>Spend : {f.spend}</div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontSize:22,fontWeight:800,color:f.score>=80?EM:f.score>=60?AM:RD }}>{f.score}</div>
+                <div style={{ fontSize:9,color:f.trend.startsWith("+")?EM:RD,fontWeight:600 }}>{f.trend} pts</div>
+              </div>
             </div>
-            <div style={{ textAlign:"right" }}>
-              <div style={{ fontSize:18,fontWeight:800,color:f.score>=80?EM:f.score>=60?AM:RD }}>{f.score}</div>
-              <div style={{ fontSize:9,color:f.trend.startsWith("+")?EM:RD }}>{f.trend} pts</div>
+            <div style={{ display:"flex",gap:3 }}>
+              {["Conf.","Litig.","Dép.","Santé","Réact."].map((a,j) => (
+                <div key={j} style={{ flex:1 }}>
+                  <div style={{ height:4,borderRadius:2,background:S[800] }}><div style={{ height:"100%",borderRadius:2,width:`${f.axes[j]}%`,background:f.axes[j]>=80?EM:f.axes[j]>=60?AM:RD,transition:"width 1s" }}/></div>
+                  <div style={{ fontSize:7,color:S[600],textAlign:"center",marginTop:2 }}>{a}</div>
+                </div>
+              ))}
             </div>
           </div>
         ))}
       </div>
+
+      {/* Alerts */}
+      <div style={{ padding:12,borderRadius:10,background:"rgba(245,158,11,0.04)",border:`1px solid rgba(245,158,11,0.1)`,marginBottom:12 }}>
+        <div style={{ fontSize:10,fontWeight:600,color:AM,marginBottom:8 }}>⚠️ Alertes actives</div>
+        {[
+          {type:"Certif. expirée",supplier:"PROTO",detail:"ISO 9001 — expirée depuis 12j",u:"haute"},
+          {type:"Hors contrat",supplier:"NEXON",detail:`${isETI?"67K€":"12K€"} sans contrat cadre`,u:"moyenne"},
+          {type:"Dépendance ↑",supplier:"DELRIN",detail:"18% → 29% en 6 mois",u:"moyenne"},
+        ].map((a,i) => (
+          <div key={i} style={{ display:"flex",alignItems:"center",gap:6,padding:"5px 0",borderTop:i?`1px solid ${S[850]}`:"none",fontSize:10 }}>
+            <span style={{ color:a.u==="haute"?RD:AM }}>●</span>
+            <span style={{ fontWeight:600,color:S[300],minWidth:78 }}>{a.type}</span>
+            <span style={{ color:S[400] }}>{a.supplier}</span>
+            <span style={{ color:S[500],flex:1 }}>— {a.detail}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ padding:10,borderRadius:8,background:"rgba(139,92,246,0.06)",display:"flex",alignItems:"center",gap:8,fontSize:11 }}>
+        <span>📋</span>
+        <span style={{ color:S[300],flex:1 }}>Briefing pré-RDV — scoring + litiges + indices en 1 PDF</span>
+        <span style={{ padding:"4px 10px",borderRadius:6,fontSize:10,fontWeight:600,background:"rgba(139,92,246,0.15)",color:VL,cursor:"pointer" }}>Générer</span>
+      </div>
+
+      <ModuleFooter
+        activities={[
+          { time:"06:00",icon:"📊",text:`Scores recalculés pour ${isETI?"280":"38"} fournisseurs — 5 axes chacun`,type:"auto" },
+          { time:"06:01",icon:"⚠️",text:"Alerte : PROTO — ISO 9001 expirée → score conformité -15 pts",type:"auto" },
+          { time:"06:01",icon:"📧",text:"Notification envoyée : 3 alertes nécessitent une action",type:"auto" },
+          { time:"lun 07h",icon:"🔍",text:"Scan hebdo certifs — 2 expirations détectées dans les 30 prochains jours",type:"auto" },
+          { time:"11:00",icon:"👤",text:"DAF marque alerte DELRIN 'En cours' — renégociation planifiée",type:"human" },
+        ]}
+        configs={[
+          { label:"Conformité",value:"25%",color:V },
+          { label:"Litiges",value:"25%",color:V },
+          { label:"Dépendance",value:"20%",color:V },
+          { label:"Santé fi.",value:"15%",color:V },
+          { label:"Réactivité",value:"15%",color:V },
+          { label:"Seuil dark buying",value:"> 10K€/an",color:RD },
+        ]}
+        configFile="scoring_config.json"
+      />
     </div>
   );
 }
 
-function SentinelPreview({ p }) {
+// ═══ VEILLE MARCHÉS ═══
+function SentinelPreview({ p, isETI }) {
   return (
     <div>
-      <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
-        <span style={{ fontSize:20 }}>📡</span>
-        <div><div style={{ fontSize:14,fontWeight:700,color:S[100] }}>Veille Marchés</div><div style={{ fontSize:10,color:S[500] }}>Indices de marché & clauses de révision</div></div>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
+        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+          <span style={{ fontSize:20 }}>📡</span>
+          <div><div style={{ fontSize:14,fontWeight:700,color:S[100] }}>Veille Marchés</div><div style={{ fontSize:10,color:S[500] }}>Indices — Clauses de révision — Simulation hausse</div></div>
+        </div>
+        <div style={{ fontSize:10,color:S[500],display:"flex",alignItems:"center",gap:4 }}><PulseDot color={EM} size={5}/> {isETI?"42":"14"} indices / jour</div>
       </div>
-      <div style={{ display:"flex",gap:12,marginBottom:16 }}>
+
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:16 }}>
         <MockKPI label="Indices suivis" value={p.modules["sentinel"].indices} color={EM}/>
         <MockKPI label="Hausses refusées" value={p.modules["sentinel"].refused} color={EM}/>
-        <MockKPI label="Clauses extraites" value={p.modules["sentinel"].clauses} color={V}/>
+        <MockKPI label="Clauses" value={p.modules["sentinel"].clauses} color={V}/>
+        <MockKPI label="Simulations" value={isETI?"18":"4"} color={CY}/>
       </div>
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12 }}>
-        <div style={{ padding:14,borderRadius:10,background:"rgba(239,68,68,0.06)",border:"1px solid rgba(239,68,68,0.12)",textAlign:"center" }}>
-          <div style={{ fontSize:9,color:S[500],marginBottom:4 }}>Hausse demandée</div>
-          <div style={{ fontSize:28,fontWeight:900,color:RD }}>+8%</div>
-          <div style={{ fontSize:9,color:S[500] }}>par le fournisseur</div>
+
+      {/* Market comparison */}
+      <div style={{ display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:12,marginBottom:12,alignItems:"center" }}>
+        <div style={{ padding:16,borderRadius:12,background:"rgba(239,68,68,0.06)",border:"1px solid rgba(239,68,68,0.1)",textAlign:"center" }}>
+          <div style={{ fontSize:9,color:S[500],marginBottom:4 }}>Fournisseur demande</div>
+          <div style={{ fontSize:32,fontWeight:900,color:RD }}>+8%</div>
+          <div style={{ fontSize:9,color:S[500] }}>"hausse matières"</div>
         </div>
-        <div style={{ padding:14,borderRadius:10,background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.12)",textAlign:"center" }}>
-          <div style={{ fontSize:9,color:S[500],marginBottom:4 }}>Hausse réelle</div>
-          <div style={{ fontSize:28,fontWeight:900,color:EM }}>+2,3%</div>
-          <div style={{ fontSize:9,color:S[500] }}>INSEE + Eurostat</div>
+        <div style={{ fontSize:20,color:S[600] }}>vs</div>
+        <div style={{ padding:16,borderRadius:12,background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.1)",textAlign:"center" }}>
+          <div style={{ fontSize:9,color:S[500],marginBottom:4 }}>Marché réel vérifié</div>
+          <div style={{ fontSize:32,fontWeight:900,color:EM }}>+2,3%</div>
+          <div style={{ fontSize:9,color:S[500] }}>INSEE + Eurostat + BdF</div>
         </div>
       </div>
-      <div style={{ padding:10,borderRadius:8,background:"rgba(16,185,129,0.08)",textAlign:"center",fontSize:12,fontWeight:700,color:EM }}>
-        💰 Économie démontrable : 5,7% d'écart injustifié
+      <div style={{ padding:12,borderRadius:10,background:"rgba(16,185,129,0.08)",textAlign:"center",marginBottom:12 }}>
+        <div style={{ fontSize:14,fontWeight:700,color:EM }}>💰 5,7% injustifié = {isETI?"~72K€":"~2 400€"} de saving</div>
+        <div style={{ fontSize:10,color:S[400],marginTop:3 }}>Preuves exportables en PDF pour la négociation</div>
       </div>
+
+      {/* Pressure map */}
+      <div style={{ padding:12,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}`,marginBottom:12 }}>
+        <div style={{ fontSize:10,color:S[500],marginBottom:10 }}>Pression prix par catégorie</div>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8 }}>
+          {[
+            {cat:"Acier",delta:"+14%",level:"🔴 Chaud",c:RD},
+            {cat:"Électronique",delta:"+5%",level:"🟠 Tiède",c:AM},
+            {cat:"Plastique",delta:"+1%",level:"🟢 Froid",c:EM},
+            {cat:"Emballage",delta:"-3%",level:"🔵 Baisse",c:CY},
+          ].map((x,i) => (
+            <div key={i} style={{ textAlign:"center",padding:10,borderRadius:8,background:`${x.c}06`,border:`1px solid ${x.c}10` }}>
+              <div style={{ fontSize:10,fontWeight:600,color:S[300] }}>{x.cat}</div>
+              <div style={{ fontSize:16,fontWeight:800,color:x.c,margin:"4px 0" }}>{x.delta}</div>
+              <div style={{ fontSize:8,color:S[500] }}>{x.level}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <ModuleFooter
+        activities={[
+          { time:"07:00",icon:"📡",text:`Scraping quotidien : ${isETI?"42":"14"} indices mis à jour (INSEE, Eurostat, BdF)`,type:"auto" },
+          { time:"07:01",icon:"⚠️",text:"Alerte : acier +14% en 3 mois → 4 fournisseurs concernés identifiés",type:"auto" },
+          { time:"08:00",icon:"🔍",text:"Gap Analysis : 2 écarts entre hausse demandée et marché réel",type:"auto" },
+          { time:"09:30",icon:"👤",text:"DAF valide la clause de révision ACME (formule 60/40 acier/cuivre)",type:"human" },
+          { time:"14:00",icon:"📊",text:"Simulation hausse ACME +8% → résultat : hausse justifiable = +2,3%",type:"auto" },
+        ]}
+        configs={[
+          { label:"Sources",value:"API → Perplexity → Manuel",color:EM },
+          { label:"Cohérence",value:"± 30%",color:AM },
+          { label:"Indices",value:`${isETI?"42":"14"} actifs`,color:V },
+          { label:"Clauses",value:"IA + validation humaine",color:VL },
+        ]}
+        configFile="indices_config.json"
+      />
     </div>
   );
 }
 
-function DVPreview({ p }) {
+// ═══ COFFRE-FORT DONNÉES ═══
+function DVPreview({ p, isETI }) {
   return (
     <div>
-      <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
-        <span style={{ fontSize:20 }}>🗄️</span>
-        <div><div style={{ fontSize:14,fontWeight:700,color:S[100] }}>Coffre-Fort Données</div><div style={{ fontSize:10,color:S[500] }}>Ingestion & classification IA</div></div>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
+        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+          <span style={{ fontSize:20 }}>🗄️</span>
+          <div><div style={{ fontSize:14,fontWeight:700,color:S[100] }}>Coffre-Fort Données</div><div style={{ fontSize:10,color:S[500] }}>Ingestion — Classification IA — Index central</div></div>
+        </div>
+        <div style={{ fontSize:10,color:S[500],display:"flex",alignItems:"center",gap:4 }}><PulseDot color={CY} size={5}/> Sync {p.modules["data-vault"].sync}</div>
       </div>
-      <div style={{ display:"flex",gap:12,marginBottom:16 }}>
+
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:16 }}>
         <MockKPI label="Documents" value={p.modules["data-vault"].docs.toLocaleString("fr-FR")} color={CY}/>
         <MockKPI label="Types" value={p.modules["data-vault"].types} color={V}/>
-        <MockKPI label="Sync" value={p.modules["data-vault"].sync} color={EM}/>
+        <MockKPI label="Ce mois" value={isETI?"+1 240":"+152"} color={EM} sub="nouveaux"/>
+        <MockKPI label="Précision IA" value="97%" color={EM} sub="classification"/>
       </div>
+
       <div style={{ display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:12 }}>
-        {[{t:"Factures",n:48,c:RD},{t:"Contrats",n:22,c:V},{t:"BDC",n:15,c:CY},{t:"Devis",n:10,c:AM},{t:"Autres",n:5,c:S[400]}].map((d,i) => (
+        {[
+          {t:"Factures",n:48,c:RD,ct:isETI?"7 402":"883"},
+          {t:"Contrats",n:22,c:V,ct:isETI?"3 392":"405"},
+          {t:"BDC",n:15,c:CY,ct:isETI?"2 313":"276"},
+          {t:"Devis",n:10,c:AM,ct:isETI?"1 542":"184"},
+          {t:"Autres",n:5,c:S[400],ct:isETI?"771":"92"},
+        ].map((d,i) => (
           <div key={i} style={{ textAlign:"center",padding:10,borderRadius:8,background:`${d.c}08`,border:`1px solid ${d.c}15` }}>
             <div style={{ fontSize:18,fontWeight:800,color:d.c }}>{d.n}%</div>
-            <div style={{ fontSize:9,color:S[400] }}>{d.t}</div>
+            <div style={{ fontSize:10,color:S[300],fontWeight:600 }}>{d.t}</div>
+            <div style={{ fontSize:8,color:S[600],marginTop:1 }}>{d.ct} docs</div>
           </div>
         ))}
       </div>
-      <div style={{ padding:10,borderRadius:8,background:"rgba(6,182,212,0.06)",fontSize:11,color:S[400],textAlign:"center" }}>
-        📁 Classification IA : {">"}98% de précision · Drag & drop + sync SharePoint auto
+
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12 }}>
+        <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+          <div style={{ fontSize:10,color:S[500],marginBottom:8 }}>Ingestion mensuelle</div>
+          <Sparkline data={p.modules["data-vault"].sparkline} color={CY} width={180} height={50}/>
+        </div>
+        <div style={{ padding:14,borderRadius:10,background:"rgba(30,41,59,0.4)",border:`1px solid ${S[800]}` }}>
+          <div style={{ fontSize:10,color:S[500],marginBottom:8 }}>Derniers classifiés</div>
+          {[
+            {name:"FA-2026-0912.pdf",type:"Facture",time:"Il y a 2h",c:RD},
+            {name:"CTR-ACME-2026.pdf",type:"Contrat",time:"Il y a 5h",c:V},
+            {name:"BDC-4521.pdf",type:"BDC",time:"Hier",c:CY},
+          ].map((d,i) => (
+            <div key={i} style={{ display:"flex",alignItems:"center",gap:6,padding:"4px 0",fontSize:10,borderTop:i?`1px solid ${S[850]}`:"none" }}>
+              <span style={{ color:d.c }}>●</span>
+              <span style={{ color:S[300],fontFamily:"'JetBrains Mono',monospace",fontSize:9 }}>{d.name}</span>
+              <span style={{ color:S[600],marginLeft:"auto" }}>{d.time}</span>
+            </div>
+          ))}
+        </div>
       </div>
+
+      <div style={{ padding:10,borderRadius:8,background:"rgba(6,182,212,0.06)",fontSize:11,color:S[400],textAlign:"center" }}>
+        🔐 Données 100% chez vous (SharePoint) · Zéro copie chez KANSO-OPS · RGPD natif
+      </div>
+
+      <ModuleFooter
+        activities={[
+          { time:"06:00",icon:"🔄",text:`Sync SharePoint : ${isETI?"47":"8"} nouveaux fichiers dans /KANSO/_DataVault/_Import/`,type:"auto" },
+          { time:"06:01",icon:"🤖",text:`Classification IA : ${isETI?"47":"8"} documents (${isETI?"32 factures, 8 contrats, 7 BDC":"5 factures, 2 contrats, 1 BDC"})`,type:"auto" },
+          { time:"06:02",icon:"📋",text:"File_Index.xlsx mis à jour — disponible pour tous les modules en aval",type:"auto" },
+          { time:"06:02",icon:"⚡",text:`Modules notifiés : Contrôle Factures lance l'analyse sur ${isETI?"32":"5"} factures`,type:"auto" },
+          { time:"12:00",icon:"🔄",text:"Sync #2 du jour — 0 nouveau fichier",type:"auto" },
+        ]}
+        configs={[
+          { label:"Sync",value:"4×/jour",color:CY },
+          { label:"Types",value:"10 catégories",color:V },
+          { label:"IA Vision",value:"Claude + GPT-4o",color:EM },
+          { label:"Fair Use",value:"2 500 docs/mois",color:AM },
+        ]}
+        configFile="SharePoint /KANSO/_DataVault/"
+      />
     </div>
   );
 }
+
 
 // ═══ SCENARIO VISUALS ═══
 function ScenarioVisual({ step, profile }) {
@@ -831,6 +1507,63 @@ function CockpitVisual({ p }) {
   );
 }
 
+// ═══ FLOATING ORBS BACKGROUND ═══
+function FloatingOrbs() {
+  return (
+    <div style={{ position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none",zIndex:0 }}>
+      <div style={{
+        position:"absolute",top:"10%",left:"15%",width:300,height:300,borderRadius:"50%",
+        background:`radial-gradient(circle, ${V}15 0%, transparent 70%)`,
+        animation:"float-slow 8s ease-in-out infinite",
+      }}/>
+      <div style={{
+        position:"absolute",top:"60%",right:"10%",width:250,height:250,borderRadius:"50%",
+        background:`radial-gradient(circle, ${EM}10 0%, transparent 70%)`,
+        animation:"float-slow2 10s ease-in-out infinite",
+      }}/>
+      <div style={{
+        position:"absolute",top:"30%",right:"30%",width:180,height:180,borderRadius:"50%",
+        background:`radial-gradient(circle, ${CY}08 0%, transparent 70%)`,
+        animation:"float-slow 12s ease-in-out infinite 2s",
+      }}/>
+    </div>
+  );
+}
+
+// ═══ ANIMATED PROGRESS BAR ═══
+function AnimatedBar({ value, color, delay = 0 }) {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (!ref.current) return;
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true); }, { threshold: 0.3 });
+    obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, []);
+  return (
+    <div ref={ref} style={{ height:4,borderRadius:2,background:S[700],overflow:"hidden" }}>
+      <div style={{
+        height:"100%",borderRadius:2,background: color,
+        width: visible ? `${value}%` : "0%",
+        transition: `width 1.2s cubic-bezier(0.16,1,0.3,1) ${delay}s`,
+      }}/>
+    </div>
+  );
+}
+
+// ═══ LIVE PULSE DOT ═══
+function PulseDot({ color = EM, size = 8 }) {
+  return (
+    <span style={{ position:"relative",display:"inline-flex",width:size,height:size }}>
+      <span style={{
+        position:"absolute",inset:0,borderRadius:"50%",background:color,
+        animation:"pulse-ring 1.5s cubic-bezier(0,0,0.2,1) infinite",opacity:0.4,
+      }}/>
+      <span style={{ width:size,height:size,borderRadius:"50%",background:color }}/>
+    </span>
+  );
+}
+
 // ═══ FLOW DIAGRAM ═══
 function FlowDiagram() {
   return (
@@ -861,16 +1594,32 @@ function FlowDiagram() {
   );
 }
 function FlowNode({ icon, label, sub, color, sm }) {
+  const [hovered, setHovered] = useState(false);
   return (
-    <div style={{ padding:sm?"8px 12px":"14px 16px",borderRadius:12,textAlign:"center",background:`${color}10`,border:`1px solid ${color}22`,transition:"all 0.3s ease" }}>
-      <div style={{ fontSize:sm?18:24,marginBottom:4 }}>{icon}</div>
+    <div onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} style={{
+      padding:sm?"8px 12px":"14px 16px",borderRadius:12,textAlign:"center",
+      background: hovered ? `${color}18` : `${color}10`,
+      border:`1px solid ${hovered ? color+"44" : color+"22"}`,
+      transition:"all 0.4s cubic-bezier(0.16,1,0.3,1)",
+      transform: hovered ? "translateY(-3px) scale(1.04)" : "translateY(0) scale(1)",
+      boxShadow: hovered ? `0 8px 24px ${color}20` : "none",
+      cursor:"default",
+    }}>
+      <div style={{ fontSize:sm?18:24,marginBottom:4,transition:"transform 0.3s",transform: hovered ? "scale(1.15)" : "scale(1)" }}>{icon}</div>
       <div style={{ fontSize:sm?11:13,fontWeight:700,color:S[200] }}>{label}</div>
       <div style={{ fontSize:sm?9:10,color:S[500],marginTop:1 }}>{sub}</div>
     </div>
   );
 }
 function FlowArrow() {
-  return <div style={{ fontSize:16,color:S[600],textAlign:"center",flexShrink:0,animation:"slide-right 1.8s ease-in-out infinite" }}>→</div>;
+  return (
+    <div style={{ textAlign:"center",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center" }}>
+      <svg width="24" height="12" style={{ animation:"slide-right 1.8s ease-in-out infinite" }}>
+        <defs><linearGradient id="arrowGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stopColor={S[600]} stopOpacity="0.3"/><stop offset="100%" stopColor={V} stopOpacity="0.8"/></linearGradient></defs>
+        <path d="M0,6 L18,6 M14,2 L20,6 L14,10" fill="none" stroke="url(#arrowGrad)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    </div>
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -925,20 +1674,40 @@ export default function KansoDemo() {
         @keyframes fadeInScale{from{opacity:0;transform:scale(0.92)}to{opacity:1;transform:scale(1)}}
         @keyframes pulse-glow{0%,100%{box-shadow:0 0 20px rgba(139,92,246,0.15)}50%{box-shadow:0 0 40px rgba(139,92,246,0.35)}}
         @keyframes slide-right{0%{transform:translateX(-8px);opacity:0.4}50%{transform:translateX(4px);opacity:1}100%{transform:translateX(8px);opacity:0.4}}
+        @keyframes gradient-shift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+        @keyframes float-slow{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-20px) scale(1.05)}}
+        @keyframes float-slow2{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(15px) scale(0.97)}}
+        @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+        @keyframes draw-line{from{stroke-dashoffset:var(--line-length)}to{stroke-dashoffset:0}}
+        @keyframes breathe{0%,100%{opacity:0.6;transform:scale(1)}50%{opacity:1;transform:scale(1.02)}}
+        @keyframes pulse-ring{0%{transform:scale(0.95);opacity:1}100%{transform:scale(1.8);opacity:0}}
+        @keyframes spin-slow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        @keyframes bar-fill{from{width:0%}to{width:var(--bar-w)}}
+        @keyframes count-glow{0%,100%{text-shadow:0 0 0 transparent}50%{text-shadow:0 0 20px currentColor}}
+        @keyframes card-in{from{opacity:0;transform:translateY(40px) scale(0.95)}to{opacity:1;transform:translateY(0) scale(1)}}
+        @keyframes slide-in-left{from{opacity:0;transform:translateX(-40px)}to{opacity:1;transform:translateX(0)}}
+        @keyframes slide-in-right{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+        @keyframes hero-text{from{opacity:0;transform:translateY(20px);filter:blur(8px)}to{opacity:1;transform:translateY(0);filter:blur(0)}}
         .reveal{opacity:0;transform:translateY(30px);transition:all 0.8s cubic-bezier(0.16,1,0.3,1)}
         .reveal.visible{opacity:1;transform:translateY(0)}
         .glass{background:rgba(30,41,59,0.5);backdrop-filter:blur(16px);border:1px solid rgba(148,163,184,0.08);border-radius:16px}
-        .glass-hover:hover{border-color:rgba(139,92,246,0.3);box-shadow:0 8px 32px rgba(139,92,246,0.1);transform:translateY(-2px)}
-        .kanso-btn{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;border-radius:10px;border:none;font-family:inherit;font-weight:600;font-size:14px;cursor:pointer;transition:all 0.25s ease;letter-spacing:0.01em}
+        .glass-hover{transition:all 0.4s cubic-bezier(0.16,1,0.3,1)}
+        .glass-hover:hover{border-color:rgba(139,92,246,0.3);box-shadow:0 8px 32px rgba(139,92,246,0.1);transform:translateY(-4px)}
+        .kanso-btn{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;border-radius:10px;border:none;font-family:inherit;font-weight:600;font-size:14px;cursor:pointer;transition:all 0.25s ease;letter-spacing:0.01em;position:relative;overflow:hidden}
         .kanso-btn-primary{background:linear-gradient(135deg,${V} 0%,${VD} 100%);color:white}
-        .kanso-btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(139,92,246,0.4)}
+        .kanso-btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(139,92,246,0.5)}
+        .kanso-btn-primary::after{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:linear-gradient(45deg,transparent 30%,rgba(255,255,255,0.1) 50%,transparent 70%);animation:shimmer 3s ease-in-out infinite}
         .kanso-btn-ghost{background:transparent;color:${S[300]};border:1px solid ${S[600]}}
-        .kanso-btn-ghost:hover{border-color:${V};color:${VL}}
+        .kanso-btn-ghost:hover{border-color:${V};color:${VL};box-shadow:0 0 20px rgba(139,92,246,0.15)}
         .tag{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase}
         .scenario-step{padding:20px 24px;border-radius:14px;cursor:pointer;transition:all 0.35s cubic-bezier(0.16,1,0.3,1);border:1px solid transparent}
-        .scenario-step.active{background:rgba(139,92,246,0.08);border-color:rgba(139,92,246,0.3)}
+        .scenario-step.active{background:rgba(139,92,246,0.08);border-color:rgba(139,92,246,0.3);animation:fadeInScale 0.3s ease}
         .scenario-step:hover:not(.active){background:rgba(139,92,246,0.04)}
         .tier-card{padding:32px 28px;border-radius:18px;transition:all 0.35s ease;position:relative;overflow:hidden}
+        .kpi-card{transition:all 0.4s cubic-bezier(0.16,1,0.3,1)}
+        .kpi-card:hover{transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,0.3)}
+        .module-card-anim{animation:card-in 0.6s cubic-bezier(0.16,1,0.3,1) both}
+        .bar-anim{animation:bar-fill 1.2s cubic-bezier(0.16,1,0.3,1) both}
         ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:${S[700]};border-radius:3px}
       `}</style>
 
@@ -949,6 +1718,7 @@ export default function KansoDemo() {
         borderBottom:`1px solid ${S[800]}`,
         display:"flex",alignItems:"center",justifyContent:"space-between",
       }}>
+        <div style={{ position:"absolute",bottom:0,left:0,right:0,height:1,background:`linear-gradient(90deg, transparent 0%, ${V}40 50%, transparent 100%)` }}/>
         <div style={{ display:"flex",alignItems:"center",gap:12 }}>
           <span style={{ fontSize:16,fontWeight:800,letterSpacing:"-0.02em" }}><span style={{ color:V }}>KANSO</span>-OPS</span>
           {/* Profile toggle */}
@@ -984,23 +1754,24 @@ export default function KansoDemo() {
         <div key={`main-${profile}`}>
           {/* ═══ HERO ═══ */}
           <section style={{ position:"relative",padding:"80px 24px 60px",textAlign:"center",overflow:"hidden" }}>
+            <FloatingOrbs/>
             <div style={{ position:"absolute",top:-120,left:"50%",transform:"translateX(-50%)",width:600,height:600,borderRadius:"50%",background:"radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 70%)",pointerEvents:"none" }}/>
             <div style={{ position:"relative",zIndex:1,maxWidth:900,margin:"0 auto" }}>
-              <div style={{ display:"inline-flex",alignItems:"center",gap:8,padding:"6px 16px",borderRadius:20,marginBottom:24,background:"rgba(139,92,246,0.1)",border:"1px solid rgba(139,92,246,0.2)",fontSize:13,fontWeight:500,color:VL }}>
-                <span style={{ width:6,height:6,borderRadius:"50%",background:EM,boxShadow:`0 0 8px ${EM}` }}/> Simulation {p.label} · CA {p.ca}
+              <div style={{ display:"inline-flex",alignItems:"center",gap:8,padding:"6px 16px",borderRadius:20,marginBottom:24,background:"rgba(139,92,246,0.1)",border:"1px solid rgba(139,92,246,0.2)",fontSize:13,fontWeight:500,color:VL,animation:"hero-text 0.8s ease both" }}>
+                <PulseDot color={EM} size={6}/> Simulation {p.label} · CA {p.ca}
               </div>
-              <h1 style={{ fontSize:"clamp(36px,6vw,62px)",fontWeight:900,lineHeight:1.05,marginBottom:20,letterSpacing:"-0.03em",background:`linear-gradient(135deg,${S[50]} 0%,${S[300]} 100%)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent" }}>
+              <h1 style={{ fontSize:"clamp(36px,6vw,62px)",fontWeight:900,lineHeight:1.05,marginBottom:20,letterSpacing:"-0.03em",background:`linear-gradient(135deg,${S[50]} 0%,${S[300]} 100%)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"hero-text 0.8s ease 0.15s both" }}>
                 Récupérez le cash.<br/>
                 <span style={{ background:`linear-gradient(135deg,${V} 0%,${CY} 100%)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent" }}>Bloquez les fuites.</span>
               </h1>
-              <p style={{ fontSize:18,color:S[400],maxWidth:600,margin:"0 auto 40px",lineHeight:1.6,fontWeight:300 }}>
+              <p style={{ fontSize:18,color:S[400],maxWidth:600,margin:"0 auto 40px",lineHeight:1.6,fontWeight:300,animation:"hero-text 0.8s ease 0.3s both" }}>
                 KANSO-OPS se branche au-dessus de votre ERP en 5 jours.<br/>Pas de projet d'intégration. Pas de consultants. Vos données restent chez vous.
               </p>
 
               {/* Hero KPIs with info bubbles */}
               <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))",gap:16,maxWidth:750,margin:"0 auto 40px" }}>
                 {p.heroKpis.map((kpi,i) => (
-                  <div key={`${profile}-${i}`} style={{ padding:20,borderRadius:14,textAlign:"center",background:"rgba(30,41,59,0.4)",border:`1px solid rgba(148,163,184,0.06)`,transition:"all 0.3s" }}>
+                  <div key={`${profile}-${i}`} className="kpi-card" style={{ padding:20,borderRadius:14,textAlign:"center",background:"rgba(30,41,59,0.4)",border:`1px solid rgba(148,163,184,0.06)`,animation:`card-in 0.6s cubic-bezier(0.16,1,0.3,1) ${0.4+i*0.1}s both` }}>
                     <div style={{ fontSize:32,fontWeight:800,color:kpi.color,marginBottom:4 }}>
                       <AnimatedCounter end={kpi.value} suffix={kpi.suffix} duration={2000+i*300}/>
                       <InfoBubble info={kpi.info} color={kpi.color}/>
@@ -1010,7 +1781,7 @@ export default function KansoDemo() {
                 ))}
               </div>
 
-              <div style={{ display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap" }}>
+              <div style={{ display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap",animation:"hero-text 0.8s ease 0.8s both" }}>
                 <button className="kanso-btn kanso-btn-primary" onClick={() => { document.getElementById("scenario")?.scrollIntoView({ behavior:"smooth" }); setScenarioPlaying(true); setScenarioStep(0); }}>▶ Voir le scénario en action</button>
                 <button className="kanso-btn kanso-btn-ghost" onClick={() => { setPage("dashboard"); window.scrollTo(0,0); }}>📊 Voir les tableaux de bord</button>
               </div>
@@ -1024,7 +1795,9 @@ export default function KansoDemo() {
               }}>
                 <div style={{
                   position:"absolute",top:0,left:0,right:0,height:3,
-                  background:`linear-gradient(90deg, ${EM}, ${V})`,
+                  background:`linear-gradient(90deg, ${EM}, ${V}, ${EM})`,
+                  backgroundSize:"200% 100%",
+                  animation:"gradient-shift 3s ease infinite",
                 }}/>
                 <div style={{ fontSize:13,color:S[400],marginBottom:8,fontWeight:500 }}>
                   💡 Ces <span style={{ color:EM,fontWeight:800 }}>{p.effortCommercial.savings}</span> récupérés, c'est l'équivalent de :
@@ -1092,10 +1865,11 @@ export default function KansoDemo() {
                       </div>
                     );
                   })}
-                  <div style={{ display:"flex",gap:8,marginTop:12,paddingLeft:4 }}>
+                  <div style={{ display:"flex",gap:8,marginTop:12,paddingLeft:4,alignItems:"center" }}>
                     <button className="kanso-btn kanso-btn-ghost" style={{ padding:"8px 16px",fontSize:12 }} onClick={() => { setScenarioStep(0); setScenarioPlaying(true); }}>
                       ▶ {scenarioPlaying ? "En cours…" : "Relancer"}
                     </button>
+                    {scenarioPlaying && <PulseDot color={V} size={8}/>}
                   </div>
                 </div>
                 <div className="glass" key={`${scenarioStep}-${profile}`} style={{ padding:32,minHeight:340,animation:"fadeInScale 0.4s cubic-bezier(0.16,1,0.3,1)" }}>
@@ -1116,9 +1890,11 @@ export default function KansoDemo() {
               <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))",gap:16 }}>
                 {modules.map((mod,i) => (
                   <div key={mod.id} className="glass glass-hover" style={{
-                    padding:24,cursor:"pointer",transition:"all 0.35s cubic-bezier(0.16,1,0.3,1)",
+                    padding:24,cursor:"pointer",
                     borderColor:activeModule===mod.id?`${mod.color}44`:undefined,
                     background:activeModule===mod.id?`${mod.color}08`:undefined,
+                    animation: sv("modules") ? `card-in 0.6s cubic-bezier(0.16,1,0.3,1) ${i*0.1}s both` : "none",
+                    opacity: sv("modules") ? undefined : 0,
                   }} onClick={() => setActiveModule(activeModule===mod.id?null:mod.id)}>
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12 }}>
                       <div style={{ display:"flex",alignItems:"center",gap:10 }}>
@@ -1159,7 +1935,13 @@ export default function KansoDemo() {
               <FlowDiagram/>
               <div style={{ display:"flex",flexWrap:"wrap",gap:12,justifyContent:"center",marginTop:40 }}>
                 {[{icon:"🔐",text:"JWT signé sur chaque appel"},{icon:"🏠",text:"Données chez vous (SharePoint)"},{icon:"🔒",text:"1 instance isolée par client"},{icon:"🛡️",text:"RGPD natif — zéro copie"}].map((b,i) => (
-                  <div key={i} style={{ display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,background:"rgba(30,41,59,0.5)",border:`1px solid rgba(148,163,184,0.08)`,fontSize:12,color:S[300],fontWeight:500 }}>
+                  <div key={i} style={{
+                    display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,
+                    background:"rgba(30,41,59,0.5)",border:`1px solid rgba(148,163,184,0.08)`,
+                    fontSize:12,color:S[300],fontWeight:500,
+                    animation: sv("flow") ? `card-in 0.5s cubic-bezier(0.16,1,0.3,1) ${0.6+i*0.1}s both` : "none",
+                    opacity: sv("flow") ? undefined : 0,
+                  }}>
                     <span>{b.icon}</span>{b.text}
                   </div>
                 ))}
@@ -1183,13 +1965,15 @@ export default function KansoDemo() {
                 <span className="tag" style={{ background:"rgba(245,158,11,0.15)",color:AM,fontSize:12,padding:"6px 14px" }}>Gratuit pour commencer</span>
               </div>
               <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(260px, 1fr))",gap:20 }}>
-                {TIERS.map((tier) => (
+                {TIERS.map((tier,ti) => (
                   <div key={tier.name} style={{
                     padding:"32px 28px",borderRadius:18,transition:"all 0.35s ease",position:"relative",overflow:"hidden",
                     background:tier.highlight?"rgba(139,92,246,0.06)":"rgba(30,41,59,0.5)",
                     border:tier.highlight?`2px solid ${V}44`:`1px solid rgba(148,163,184,0.08)`,
+                    animation: sv("pricing") ? `card-in 0.6s cubic-bezier(0.16,1,0.3,1) ${0.2+ti*0.15}s both` : "none",
+                    opacity: sv("pricing") ? undefined : 0,
                   }}>
-                    {tier.highlight && <div style={{ position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${V},${CY})`,borderRadius:"18px 18px 0 0" }}/>}
+                    {tier.highlight && <div style={{ position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${V},${CY},${V})`,backgroundSize:"200% 100%",animation:"gradient-shift 3s ease infinite",borderRadius:"18px 18px 0 0" }}/>}
                     <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:16 }}>
                       <div style={{ width:10,height:10,borderRadius:"50%",background:tier.color,boxShadow:`0 0 12px ${tier.color}66` }}/>
                       <span style={{ fontWeight:700,fontSize:18 }}>{tier.name}</span>
@@ -1220,10 +2004,13 @@ export default function KansoDemo() {
                 background:`linear-gradient(135deg, rgba(139,92,246,0.08) 0%, rgba(16,185,129,0.08) 100%)`,
                 border:`1px solid rgba(139,92,246,0.2)`,
                 position:"relative",overflow:"hidden",
+                animation:"pulse-glow 4s ease-in-out infinite",
               }}>
                 <div style={{
                   position:"absolute",top:0,left:0,right:0,height:3,
-                  background:`linear-gradient(90deg, ${V}, ${EM})`,
+                  background:`linear-gradient(90deg, ${V}, ${EM}, ${CY}, ${V})`,
+                  backgroundSize:"200% 100%",
+                  animation:"gradient-shift 4s ease infinite",
                 }}/>
                 <div style={{ fontSize:28,fontWeight:800,marginBottom:8,letterSpacing:"-0.02em" }}>
                   Prêt à récupérer votre cash ?
